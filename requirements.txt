@@ -6,3 +6,12 @@ google-cloud-aiplatform>=1.25.0
 google-genai>=1.9.0
 python-dotenv>=1.0.0
 pathspec>=0.11.0
+
+# Performance monitoring and system utilities
+psutil>=5.9.0
+
+# Progress tracking and timing
+tqdm>=4.64.0
+
+# Memory optimization (optional)
+memory-profiler>=0.60.0

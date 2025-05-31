@@ -3,6 +3,7 @@ from pocketflow import Flow
 from nodes import (
     FetchRepo,
     SpringMigrationAnalyzer,
+    DependencyCompatibilityAnalyzer,
     MigrationPlanGenerator,
     MigrationReportGenerator,
     FileBackupManager,
@@ -18,6 +19,7 @@ def create_spring_migration_flow():
     # Create nodes
     fetch_repo = FetchRepo()
     analyzer = SpringMigrationAnalyzer()
+    dependency_analyzer = DependencyCompatibilityAnalyzer()
     plan_generator = MigrationPlanGenerator()
     backup_manager = FileBackupManager()
     change_generator = MigrationChangeGenerator()
@@ -28,7 +30,8 @@ def create_spring_migration_flow():
     
     # Connect the basic analysis flow
     fetch_repo >> analyzer
-    analyzer >> plan_generator
+    analyzer >> dependency_analyzer
+    dependency_analyzer >> plan_generator
     plan_generator >> backup_manager
     backup_manager >> change_generator
     change_generator >> confirmation_node
