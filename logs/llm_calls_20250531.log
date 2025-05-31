@@ -1,0 +1,413 @@
+2025-05-31 01:58:52,698 - INFO - Starting LLM call, use_cache=True
+2025-05-31 01:58:52,698 - INFO - Creating OpenAI client
+2025-05-31 01:58:52,716 - INFO - Making API call to OpenAI
+2025-05-31 01:59:27,669 - INFO - Successfully received response from OpenAI
+2025-05-31 01:59:37,673 - INFO - Starting LLM call, use_cache=False
+2025-05-31 01:59:37,674 - INFO - Creating OpenAI client
+2025-05-31 01:59:37,684 - INFO - Making API call to OpenAI
+2025-05-31 02:00:07,962 - INFO - Successfully received response from OpenAI
+2025-05-31 02:00:17,968 - INFO - Starting LLM call, use_cache=False
+2025-05-31 02:00:17,968 - INFO - Creating OpenAI client
+2025-05-31 02:00:17,978 - INFO - Making API call to OpenAI
+2025-05-31 02:00:33,276 - INFO - Successfully received response from OpenAI
+2025-05-31 02:03:57,298 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:03:57,298 - INFO - Creating OpenAI client
+2025-05-31 02:03:57,310 - INFO - Making API call to OpenAI
+2025-05-31 02:04:11,681 - INFO - Successfully received response from OpenAI
+2025-05-31 02:06:59,216 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:06:59,216 - INFO - Creating OpenAI client
+2025-05-31 02:06:59,228 - INFO - Making API call to OpenAI
+2025-05-31 02:07:12,840 - INFO - Successfully received response from OpenAI
+2025-05-31 02:07:12,841 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:07:12,841 - INFO - Creating OpenAI client
+2025-05-31 02:07:12,844 - INFO - Making API call to OpenAI
+2025-05-31 02:07:43,342 - INFO - Successfully received response from OpenAI
+2025-05-31 02:12:40,307 - ERROR - Error in call_llm: No module named 'openai'
+2025-05-31 02:12:40,308 - ERROR - Exception type: ModuleNotFoundError
+2025-05-31 02:12:40,308 - ERROR - Traceback: Traceback (most recent call last):
+  File "/Users/roshinpv/Documents/Projects/migraite/utils/call_llm.py", line 112, in call_llm
+    from openai import OpenAI
+ModuleNotFoundError: No module named 'openai'
+
+2025-05-31 02:12:40,308 - INFO - Returning fallback response: I'm sorry, but I encountered an error while processing your request. Please try again later.
+2025-05-31 02:12:50,314 - ERROR - Error in call_llm: No module named 'openai'
+2025-05-31 02:12:50,315 - ERROR - Exception type: ModuleNotFoundError
+2025-05-31 02:12:50,315 - ERROR - Traceback: Traceback (most recent call last):
+  File "/Users/roshinpv/Documents/Projects/migraite/utils/call_llm.py", line 112, in call_llm
+    from openai import OpenAI
+ModuleNotFoundError: No module named 'openai'
+
+2025-05-31 02:12:50,315 - INFO - Returning fallback response: I'm sorry, but I encountered an error while processing your request. Please try again later.
+2025-05-31 02:13:00,322 - ERROR - Error in call_llm: No module named 'openai'
+2025-05-31 02:13:00,322 - ERROR - Exception type: ModuleNotFoundError
+2025-05-31 02:13:00,322 - ERROR - Traceback: Traceback (most recent call last):
+  File "/Users/roshinpv/Documents/Projects/migraite/utils/call_llm.py", line 112, in call_llm
+    from openai import OpenAI
+ModuleNotFoundError: No module named 'openai'
+
+2025-05-31 02:13:00,323 - INFO - Returning fallback response: I'm sorry, but I encountered an error while processing your request. Please try again later.
+2025-05-31 02:13:58,381 - ERROR - Error in call_llm: No module named 'openai'
+2025-05-31 02:13:58,382 - ERROR - Exception type: ModuleNotFoundError
+2025-05-31 02:13:58,382 - ERROR - Traceback: Traceback (most recent call last):
+  File "/Users/roshinpv/Documents/Projects/migraite/utils/call_llm.py", line 112, in call_llm
+    from openai import OpenAI
+ModuleNotFoundError: No module named 'openai'
+
+2025-05-31 02:13:58,382 - INFO - Returning fallback response: I'm sorry, but I encountered an error while processing your request. Please try again later.
+2025-05-31 02:14:08,385 - ERROR - Error in call_llm: No module named 'openai'
+2025-05-31 02:14:08,386 - ERROR - Exception type: ModuleNotFoundError
+2025-05-31 02:14:08,386 - ERROR - Traceback: Traceback (most recent call last):
+  File "/Users/roshinpv/Documents/Projects/migraite/utils/call_llm.py", line 112, in call_llm
+    from openai import OpenAI
+ModuleNotFoundError: No module named 'openai'
+
+2025-05-31 02:14:08,386 - INFO - Returning fallback response: I'm sorry, but I encountered an error while processing your request. Please try again later.
+2025-05-31 02:14:29,529 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:14:29,529 - WARNING - Prompt too large: ~14831 tokens. Truncating to ~8000 tokens.
+2025-05-31 02:14:29,529 - INFO - Creating OpenAI client
+2025-05-31 02:14:29,552 - INFO - Making API call to OpenAI
+2025-05-31 02:15:06,054 - INFO - Successfully received response from OpenAI
+2025-05-31 02:15:06,055 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:15:06,055 - INFO - Creating OpenAI client
+2025-05-31 02:15:06,063 - INFO - Making API call to OpenAI
+2025-05-31 02:15:30,619 - INFO - Successfully received response from OpenAI
+2025-05-31 02:15:40,621 - INFO - Starting LLM call, use_cache=False
+2025-05-31 02:15:40,621 - INFO - Creating OpenAI client
+2025-05-31 02:15:40,634 - INFO - Making API call to OpenAI
+2025-05-31 02:16:33,254 - INFO - Successfully received response from OpenAI
+2025-05-31 02:21:47,319 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:21:47,319 - INFO - Creating OpenAI client
+2025-05-31 02:21:47,337 - INFO - Making API call to OpenAI
+2025-05-31 02:22:15,838 - INFO - Successfully received response from OpenAI
+2025-05-31 02:22:15,839 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:22:15,839 - INFO - Creating OpenAI client
+2025-05-31 02:22:15,843 - INFO - Making API call to OpenAI
+2025-05-31 02:22:48,090 - INFO - Successfully received response from OpenAI
+2025-05-31 02:22:58,097 - INFO - Starting LLM call, use_cache=False
+2025-05-31 02:22:58,097 - INFO - Creating OpenAI client
+2025-05-31 02:22:58,105 - INFO - Making API call to OpenAI
+2025-05-31 02:23:38,399 - INFO - Successfully received response from OpenAI
+2025-05-31 02:23:48,401 - INFO - Starting LLM call, use_cache=False
+2025-05-31 02:23:48,401 - INFO - Creating OpenAI client
+2025-05-31 02:23:48,409 - INFO - Making API call to OpenAI
+2025-05-31 02:24:33,506 - INFO - Successfully received response from OpenAI
+2025-05-31 02:34:40,170 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:34:40,170 - INFO - Creating OpenAI client
+2025-05-31 02:34:40,189 - INFO - Making API call to OpenAI
+2025-05-31 02:34:45,491 - INFO - Successfully received response from OpenAI
+2025-05-31 02:34:45,494 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:34:45,494 - INFO - Creating OpenAI client
+2025-05-31 02:34:45,498 - INFO - Making API call to OpenAI
+2025-05-31 02:34:49,849 - INFO - Successfully received response from OpenAI
+2025-05-31 02:34:49,854 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:34:49,854 - INFO - Creating OpenAI client
+2025-05-31 02:34:49,863 - INFO - Making API call to OpenAI
+2025-05-31 02:34:51,078 - INFO - Successfully received response from OpenAI
+2025-05-31 02:34:51,080 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:34:51,080 - INFO - Creating OpenAI client
+2025-05-31 02:34:51,086 - INFO - Making API call to OpenAI
+2025-05-31 02:35:04,175 - INFO - Successfully received response from OpenAI
+2025-05-31 02:35:04,176 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:35:04,176 - INFO - Creating OpenAI client
+2025-05-31 02:35:04,183 - INFO - Making API call to OpenAI
+2025-05-31 02:35:20,065 - INFO - Successfully received response from OpenAI
+2025-05-31 02:35:20,065 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:35:20,065 - INFO - Creating OpenAI client
+2025-05-31 02:35:20,073 - INFO - Making API call to OpenAI
+2025-05-31 02:35:41,296 - INFO - Successfully received response from OpenAI
+2025-05-31 02:35:41,296 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:35:41,296 - INFO - Creating OpenAI client
+2025-05-31 02:35:41,303 - INFO - Making API call to OpenAI
+2025-05-31 02:36:00,920 - INFO - Successfully received response from OpenAI
+2025-05-31 02:36:00,920 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:36:00,920 - INFO - Creating OpenAI client
+2025-05-31 02:36:00,924 - INFO - Making API call to OpenAI
+2025-05-31 02:36:16,154 - INFO - Successfully received response from OpenAI
+2025-05-31 02:36:16,154 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:36:16,154 - INFO - Creating OpenAI client
+2025-05-31 02:36:16,158 - INFO - Making API call to OpenAI
+2025-05-31 02:36:33,852 - INFO - Successfully received response from OpenAI
+2025-05-31 02:36:33,852 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:36:33,852 - WARNING - Prompt too large: ~8084 tokens. Truncating to ~8000 tokens.
+2025-05-31 02:36:33,852 - INFO - Creating OpenAI client
+2025-05-31 02:36:33,860 - INFO - Making API call to OpenAI
+2025-05-31 02:36:56,580 - INFO - Successfully received response from OpenAI
+2025-05-31 02:36:56,580 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:36:56,580 - WARNING - Prompt too large: ~9188 tokens. Truncating to ~8000 tokens.
+2025-05-31 02:36:56,580 - INFO - Creating OpenAI client
+2025-05-31 02:36:56,585 - INFO - Making API call to OpenAI
+2025-05-31 02:37:22,370 - INFO - Successfully received response from OpenAI
+2025-05-31 02:37:22,370 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:37:22,370 - WARNING - Prompt too large: ~10333 tokens. Truncating to ~8000 tokens.
+2025-05-31 02:37:22,370 - INFO - Creating OpenAI client
+2025-05-31 02:37:22,378 - INFO - Making API call to OpenAI
+2025-05-31 02:43:46,219 - INFO - Starting LLM call, use_cache=True
+2025-05-31 02:43:46,219 - INFO - Creating OpenAI client
+2025-05-31 02:43:46,236 - INFO - Making API call to OpenAI
+2025-05-31 03:00:00,744 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:00:00,744 - WARNING - Prompt too large: ~15086 tokens. Truncating to ~8000 tokens.
+2025-05-31 03:00:00,744 - INFO - Creating OpenAI client
+2025-05-31 03:00:00,762 - INFO - Making API call to OpenAI
+2025-05-31 03:00:36,933 - INFO - Successfully received response from OpenAI
+2025-05-31 03:00:46,938 - INFO - Starting LLM call, use_cache=False
+2025-05-31 03:00:46,939 - WARNING - Prompt too large: ~15086 tokens. Truncating to ~8000 tokens.
+2025-05-31 03:00:46,939 - INFO - Creating OpenAI client
+2025-05-31 03:00:46,953 - INFO - Making API call to OpenAI
+2025-05-31 03:01:22,347 - INFO - Successfully received response from OpenAI
+2025-05-31 03:01:32,350 - INFO - Starting LLM call, use_cache=False
+2025-05-31 03:01:32,350 - WARNING - Prompt too large: ~15086 tokens. Truncating to ~8000 tokens.
+2025-05-31 03:01:32,351 - INFO - Creating OpenAI client
+2025-05-31 03:01:32,363 - INFO - Making API call to OpenAI
+2025-05-31 03:02:21,523 - INFO - Successfully received response from OpenAI
+2025-05-31 03:02:21,524 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:02:21,524 - INFO - Creating OpenAI client
+2025-05-31 03:02:21,530 - INFO - Making API call to OpenAI
+2025-05-31 03:02:57,550 - INFO - Successfully received response from OpenAI
+2025-05-31 03:02:57,555 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:02:57,555 - INFO - Creating OpenAI client
+2025-05-31 03:02:57,560 - INFO - Making API call to OpenAI
+2025-05-31 03:03:13,073 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:13,073 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:13,073 - INFO - Creating OpenAI client
+2025-05-31 03:03:13,078 - INFO - Making API call to OpenAI
+2025-05-31 03:03:18,726 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:18,726 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:18,726 - INFO - Creating OpenAI client
+2025-05-31 03:03:18,735 - INFO - Making API call to OpenAI
+2025-05-31 03:03:22,243 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:22,244 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:22,244 - INFO - Creating OpenAI client
+2025-05-31 03:03:22,248 - INFO - Making API call to OpenAI
+2025-05-31 03:03:24,631 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:24,631 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:24,631 - INFO - Creating OpenAI client
+2025-05-31 03:03:24,640 - INFO - Making API call to OpenAI
+2025-05-31 03:03:28,009 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:28,009 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:28,009 - INFO - Creating OpenAI client
+2025-05-31 03:03:28,016 - INFO - Making API call to OpenAI
+2025-05-31 03:03:30,857 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:30,857 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:30,857 - INFO - Creating OpenAI client
+2025-05-31 03:03:30,867 - INFO - Making API call to OpenAI
+2025-05-31 03:03:34,624 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:34,624 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:34,624 - INFO - Creating OpenAI client
+2025-05-31 03:03:34,635 - INFO - Making API call to OpenAI
+2025-05-31 03:03:42,178 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:42,178 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:42,178 - INFO - Creating OpenAI client
+2025-05-31 03:03:42,186 - INFO - Making API call to OpenAI
+2025-05-31 03:03:48,995 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:48,995 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:48,995 - INFO - Creating OpenAI client
+2025-05-31 03:03:49,003 - INFO - Making API call to OpenAI
+2025-05-31 03:03:52,784 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:52,784 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:52,784 - INFO - Creating OpenAI client
+2025-05-31 03:03:52,792 - INFO - Making API call to OpenAI
+2025-05-31 03:03:55,907 - INFO - Successfully received response from OpenAI
+2025-05-31 03:03:55,908 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:03:55,908 - INFO - Creating OpenAI client
+2025-05-31 03:03:55,917 - INFO - Making API call to OpenAI
+2025-05-31 03:04:01,451 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:01,452 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:01,452 - INFO - Creating OpenAI client
+2025-05-31 03:04:01,462 - INFO - Making API call to OpenAI
+2025-05-31 03:04:08,883 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:08,884 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:08,884 - INFO - Creating OpenAI client
+2025-05-31 03:04:08,891 - INFO - Making API call to OpenAI
+2025-05-31 03:04:13,534 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:13,535 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:13,535 - INFO - Creating OpenAI client
+2025-05-31 03:04:13,544 - INFO - Making API call to OpenAI
+2025-05-31 03:04:21,708 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:21,708 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:21,708 - INFO - Creating OpenAI client
+2025-05-31 03:04:21,713 - INFO - Making API call to OpenAI
+2025-05-31 03:04:29,683 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:29,683 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:29,683 - INFO - Creating OpenAI client
+2025-05-31 03:04:29,692 - INFO - Making API call to OpenAI
+2025-05-31 03:04:37,989 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:37,989 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:37,989 - INFO - Creating OpenAI client
+2025-05-31 03:04:37,997 - INFO - Making API call to OpenAI
+2025-05-31 03:04:45,180 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:45,180 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:45,180 - INFO - Creating OpenAI client
+2025-05-31 03:04:45,189 - INFO - Making API call to OpenAI
+2025-05-31 03:04:50,717 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:50,717 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:50,718 - INFO - Creating OpenAI client
+2025-05-31 03:04:50,728 - INFO - Making API call to OpenAI
+2025-05-31 03:04:58,234 - INFO - Successfully received response from OpenAI
+2025-05-31 03:04:58,234 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:04:58,234 - INFO - Creating OpenAI client
+2025-05-31 03:04:58,238 - INFO - Making API call to OpenAI
+2025-05-31 03:05:04,587 - INFO - Successfully received response from OpenAI
+2025-05-31 03:05:04,587 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:05:04,587 - INFO - Creating OpenAI client
+2025-05-31 03:05:04,597 - INFO - Making API call to OpenAI
+2025-05-31 03:05:09,647 - INFO - Successfully received response from OpenAI
+2025-05-31 03:05:09,648 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:05:09,648 - INFO - Creating OpenAI client
+2025-05-31 03:05:09,658 - INFO - Making API call to OpenAI
+2025-05-31 03:05:16,381 - INFO - Successfully received response from OpenAI
+2025-05-31 03:05:16,381 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:05:16,381 - INFO - Creating OpenAI client
+2025-05-31 03:05:16,391 - INFO - Making API call to OpenAI
+2025-05-31 03:10:11,961 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:11,962 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:11,962 - INFO - Creating OpenAI client
+2025-05-31 03:10:11,967 - INFO - Making API call to OpenAI
+2025-05-31 03:10:16,419 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:16,419 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:16,420 - INFO - Creating OpenAI client
+2025-05-31 03:10:16,429 - INFO - Making API call to OpenAI
+2025-05-31 03:10:20,702 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:20,703 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:20,703 - INFO - Creating OpenAI client
+2025-05-31 03:10:20,713 - INFO - Making API call to OpenAI
+2025-05-31 03:10:24,583 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:24,584 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:24,584 - INFO - Creating OpenAI client
+2025-05-31 03:10:24,595 - INFO - Making API call to OpenAI
+2025-05-31 03:10:28,831 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:28,831 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:28,831 - INFO - Creating OpenAI client
+2025-05-31 03:10:28,840 - INFO - Making API call to OpenAI
+2025-05-31 03:10:34,227 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:34,227 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:34,228 - INFO - Creating OpenAI client
+2025-05-31 03:10:34,237 - INFO - Making API call to OpenAI
+2025-05-31 03:10:41,405 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:41,405 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:41,405 - INFO - Creating OpenAI client
+2025-05-31 03:10:41,415 - INFO - Making API call to OpenAI
+2025-05-31 03:10:48,091 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:48,092 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:48,092 - INFO - Creating OpenAI client
+2025-05-31 03:10:48,101 - INFO - Making API call to OpenAI
+2025-05-31 03:10:52,512 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:52,512 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:52,512 - INFO - Creating OpenAI client
+2025-05-31 03:10:52,522 - INFO - Making API call to OpenAI
+2025-05-31 03:10:57,983 - INFO - Successfully received response from OpenAI
+2025-05-31 03:10:57,984 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:10:57,984 - INFO - Creating OpenAI client
+2025-05-31 03:10:57,993 - INFO - Making API call to OpenAI
+2025-05-31 03:11:02,209 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:02,210 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:02,210 - INFO - Creating OpenAI client
+2025-05-31 03:11:02,220 - INFO - Making API call to OpenAI
+2025-05-31 03:11:06,224 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:06,225 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:06,225 - INFO - Creating OpenAI client
+2025-05-31 03:11:06,234 - INFO - Making API call to OpenAI
+2025-05-31 03:11:10,807 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:10,807 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:10,807 - INFO - Creating OpenAI client
+2025-05-31 03:11:10,817 - INFO - Making API call to OpenAI
+2025-05-31 03:11:15,372 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:15,372 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:15,372 - INFO - Creating OpenAI client
+2025-05-31 03:11:15,382 - INFO - Making API call to OpenAI
+2025-05-31 03:11:23,565 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:23,565 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:23,565 - INFO - Creating OpenAI client
+2025-05-31 03:11:23,572 - INFO - Making API call to OpenAI
+2025-05-31 03:11:28,210 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:28,210 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:28,210 - INFO - Creating OpenAI client
+2025-05-31 03:11:28,220 - INFO - Making API call to OpenAI
+2025-05-31 03:11:35,007 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:35,007 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:35,007 - INFO - Creating OpenAI client
+2025-05-31 03:11:35,017 - INFO - Making API call to OpenAI
+2025-05-31 03:11:39,981 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:39,981 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:39,981 - INFO - Creating OpenAI client
+2025-05-31 03:11:39,990 - INFO - Making API call to OpenAI
+2025-05-31 03:11:44,967 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:44,967 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:44,967 - INFO - Creating OpenAI client
+2025-05-31 03:11:44,977 - INFO - Making API call to OpenAI
+2025-05-31 03:11:51,446 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:51,446 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:51,446 - INFO - Creating OpenAI client
+2025-05-31 03:11:51,455 - INFO - Making API call to OpenAI
+2025-05-31 03:11:59,842 - INFO - Successfully received response from OpenAI
+2025-05-31 03:11:59,842 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:11:59,842 - INFO - Creating OpenAI client
+2025-05-31 03:11:59,849 - INFO - Making API call to OpenAI
+2025-05-31 03:12:06,661 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:06,661 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:06,662 - INFO - Creating OpenAI client
+2025-05-31 03:12:06,671 - INFO - Making API call to OpenAI
+2025-05-31 03:12:13,378 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:13,378 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:13,378 - INFO - Creating OpenAI client
+2025-05-31 03:12:13,389 - INFO - Making API call to OpenAI
+2025-05-31 03:12:21,572 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:21,572 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:21,572 - INFO - Creating OpenAI client
+2025-05-31 03:12:21,583 - INFO - Making API call to OpenAI
+2025-05-31 03:12:32,885 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:32,885 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:32,885 - INFO - Creating OpenAI client
+2025-05-31 03:12:32,894 - INFO - Making API call to OpenAI
+2025-05-31 03:12:37,984 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:37,984 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:37,984 - INFO - Creating OpenAI client
+2025-05-31 03:12:37,994 - INFO - Making API call to OpenAI
+2025-05-31 03:12:45,935 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:45,935 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:45,935 - INFO - Creating OpenAI client
+2025-05-31 03:12:45,946 - INFO - Making API call to OpenAI
+2025-05-31 03:12:58,396 - INFO - Successfully received response from OpenAI
+2025-05-31 03:12:58,397 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:12:58,397 - INFO - Creating OpenAI client
+2025-05-31 03:12:58,406 - INFO - Making API call to OpenAI
+2025-05-31 03:13:03,206 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:03,206 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:03,206 - INFO - Creating OpenAI client
+2025-05-31 03:13:03,215 - INFO - Making API call to OpenAI
+2025-05-31 03:13:11,036 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:11,036 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:11,036 - INFO - Creating OpenAI client
+2025-05-31 03:13:11,045 - INFO - Making API call to OpenAI
+2025-05-31 03:13:15,883 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:15,883 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:15,883 - INFO - Creating OpenAI client
+2025-05-31 03:13:15,892 - INFO - Making API call to OpenAI
+2025-05-31 03:13:19,419 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:19,419 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:19,420 - INFO - Creating OpenAI client
+2025-05-31 03:13:19,430 - INFO - Making API call to OpenAI
+2025-05-31 03:13:24,463 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:24,463 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:24,463 - INFO - Creating OpenAI client
+2025-05-31 03:13:24,473 - INFO - Making API call to OpenAI
+2025-05-31 03:13:29,068 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:29,068 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:29,068 - INFO - Creating OpenAI client
+2025-05-31 03:13:29,078 - INFO - Making API call to OpenAI
+2025-05-31 03:13:37,075 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:37,076 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:37,076 - INFO - Creating OpenAI client
+2025-05-31 03:13:37,084 - INFO - Making API call to OpenAI
+2025-05-31 03:13:41,826 - INFO - Successfully received response from OpenAI
+2025-05-31 03:13:41,827 - INFO - Starting LLM call, use_cache=True
+2025-05-31 03:13:41,827 - INFO - Creating OpenAI client
+2025-05-31 03:13:41,833 - INFO - Making API call to OpenAI
+2025-05-31 03:13:51,497 - INFO - Successfully received response from OpenAI
+2025-05-31 10:01:20,084 - INFO - Starting LLM call, use_cache=True
+2025-05-31 10:01:20,084 - INFO - Creating OpenAI client
+2025-05-31 10:01:20,103 - INFO - Making API call to OpenAI
+2025-05-31 10:01:36,334 - INFO - Successfully received response from OpenAI
+2025-05-31 10:01:36,334 - INFO - Starting LLM call, use_cache=True
+2025-05-31 10:01:36,334 - INFO - Creating OpenAI client
+2025-05-31 10:01:36,339 - INFO - Making API call to OpenAI
+2025-05-31 10:01:56,497 - INFO - Successfully received response from OpenAI
