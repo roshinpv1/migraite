@@ -3,6 +3,10 @@ import logging
 import json
 from datetime import datetime
 import requests
+import time
+from functools import lru_cache
+import hashlib
+from utils.verbose_logger import get_verbose_logger
 
 # Configure logging
 log_directory = os.getenv("LOG_DIR", "logs")
@@ -24,236 +28,377 @@ logger.addHandler(file_handler)
 # Simple cache configuration
 cache_file = "llm_cache.json"
 
+# Configure LLM settings for large repositories
+DEFAULT_TIMEOUT = 300  # 5 minutes for large prompts
+MAX_RETRIES = 3
+RATE_LIMIT_DELAY = 2  # seconds between requests
+MAX_CONTEXT_LENGTH = 100000  # chars - adjust based on LLM model
 
-# # By default, we Google Gemini 2.5 pro, as it shows great performance for code understanding
-# def call_llm(prompt: str, use_cache: bool = True) -> str:
-#     # Log the prompt
-#     logger.info(f"PROMPT: {prompt}")
 
-#     # Check cache if enabled
-#     if use_cache:
-#         # Load cache from disk
-#         cache = {}
-#         if os.path.exists(cache_file):
-#             try:
-#                 with open(cache_file, "r") as f:
-#                     cache = json.load(f)
-#             except:
-#                 logger.warning(f"Failed to load cache, starting with empty cache")
-
-#         # Return from cache if exists
-#         if prompt in cache:
-#             logger.info(f"RESPONSE: {cache[prompt]}")
-#             return cache[prompt]
-
-#     # # Call the LLM if not in cache or cache disabled
-#     # client = genai.Client(
-#     #     vertexai=True,
-#     #     # TODO: change to your own project id and location
-#     #     project=os.getenv("GEMINI_PROJECT_ID", "your-project-id"),
-#     #     location=os.getenv("GEMINI_LOCATION", "us-central1")
-#     # )
-
-#     # You can comment the previous line and use the AI Studio key instead:
-#     client = genai.Client(
-#         api_key=os.getenv("GEMINI_API_KEY", ""),
-#     )
-#     model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro-exp-03-25")
-#     # model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-04-17")
+def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RETRIES):
+    """
+    Enhanced LLM calling with timeout handling, rate limiting, and large content optimization.
+    """
+    vlogger = get_verbose_logger()
     
-#     response = client.models.generate_content(model=model, contents=[prompt])
-#     response_text = response.text
+    # Apply content length optimization for large prompts
+    if len(prompt) > MAX_CONTEXT_LENGTH:
+        vlogger.warning(f"Large prompt detected ({len(prompt)} chars), truncating to {MAX_CONTEXT_LENGTH}")
+        prompt = _optimize_large_prompt(prompt)
+    
+    # Generate cache key
+    cache_key = hashlib.md5(prompt.encode()).hexdigest()
+    
+    if use_cache:
+        cached_result = _get_cached_response(cache_key)
+        if cached_result:
+            vlogger.cache_hit("LLM", cache_key[:8])
+            return cached_result
+        else:
+            vlogger.cache_miss("LLM", cache_key[:8])
+    
+    # Track attempt number for verbose logging
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                # Rate limiting: wait before retry
+                delay = RATE_LIMIT_DELAY * (2 ** attempt)  # Exponential backoff
+                vlogger.warning(f"LLM retry {attempt + 1}/{max_retries}, waiting {delay}s")
+                time.sleep(delay)
+            
+            vlogger.llm_call(f"Attempt {attempt + 1}", "", len(prompt), use_cache)
+            
+            # Use the appropriate LLM provider
+            response = _make_llm_request(prompt, timeout)
+            
+            # Cache successful response
+            if use_cache and response:
+                _cache_response(cache_key, response)
+            
+            vlogger.success(f"LLM call successful (attempt {attempt + 1})")
+            return response
+            
+        except TimeoutError as e:
+            vlogger.error(f"LLM request timeout on attempt {attempt + 1}", e)
+            if attempt == max_retries - 1:
+                raise Exception(f"LLM request timed out after {max_retries} attempts")
+        except Exception as e:
+            vlogger.error(f"LLM request failed on attempt {attempt + 1}", e)
+            if attempt == max_retries - 1:
+                raise Exception(f"LLM request failed: {str(e)}")
+    
+    raise Exception("LLM request failed after all retry attempts")
 
-#     # Log the response
-#     logger.info(f"RESPONSE: {response_text}")
 
-#     # Update cache if enabled
-#     if use_cache:
-#         # Load cache again to avoid overwrites
-#         cache = {}
-#         if os.path.exists(cache_file):
-#             try:
-#                 with open(cache_file, "r") as f:
-#                     cache = json.load(f)
-#             except:
-#                 pass
+def _optimize_large_prompt(prompt):
+    """Optimize large prompts by intelligent truncation and summarization."""
+    vlogger = get_verbose_logger()
+    
+    # Strategy 1: Extract key sections
+    key_sections = []
+    
+    # Always keep the system prompt and instructions
+    lines = prompt.split('\n')
+    system_section = []
+    files_section = []
+    current_section = system_section
+    
+    for line in lines:
+        if "# System Prompt" in line or "## Analysis Requirements" in line:
+            current_section = system_section
+        elif "## Codebase Context" in line or "--- File" in line:
+            current_section = files_section
+        
+        current_section.append(line)
+    
+    # Keep all system instructions
+    optimized_prompt = '\n'.join(system_section)
+    
+    # Intelligently sample files section
+    remaining_budget = MAX_CONTEXT_LENGTH - len(optimized_prompt)
+    
+    # Prioritize certain file types
+    priority_files = []
+    regular_files = []
+    
+    for line in files_section:
+        if any(pattern in line.lower() for pattern in ['pom.xml', 'build.gradle', 'application.', 'security', 'config']):
+            priority_files.append(line)
+        else:
+            regular_files.append(line)
+    
+    # Add priority files first
+    files_content = '\n'.join(priority_files)
+    if len(files_content) < remaining_budget:
+        # Add regular files until budget is reached
+        for line in regular_files:
+            if len(files_content) + len(line) < remaining_budget:
+                files_content += '\n' + line
+            else:
+                break
+        
+        files_content += '\n... [Additional files truncated for performance optimization] ...'
+    
+    optimized_prompt += '\n\n## Codebase Context (Optimized):\n' + files_content
+    
+    vlogger.optimization_applied("Large prompt truncation", f"{len(prompt)} → {len(optimized_prompt)} chars")
+    return optimized_prompt
 
-#         # Add to cache and save
-#         cache[prompt] = response_text
-#         try:
-#             with open(cache_file, "w") as f:
-#                 json.dump(cache, f)
-#         except Exception as e:
-#             logger.error(f"Failed to save cache: {e}")
 
-#     return response_text
+def _make_llm_request(prompt, timeout):
+    """Make the actual LLM request with timeout handling."""
+    vlogger = get_verbose_logger()
+    
+    # Try different LLM providers in order of preference
+    providers = ['openai', 'anthropic', 'google']
+    
+    for provider in providers:
+        try:
+            if provider == 'openai' and os.getenv('OPENAI_API_KEY'):
+                return _call_openai(prompt, timeout)
+            elif provider == 'anthropic' and os.getenv('ANTHROPIC_API_KEY'):
+                return _call_anthropic(prompt, timeout)
+            elif provider == 'google' and os.getenv('GOOGLE_API_KEY'):
+                return _call_google(prompt, timeout)
+        except Exception as e:
+            vlogger.warning(f"Provider {provider} failed: {str(e)}")
+            continue
+    
+    # Fallback: return a structured error response that can be parsed
+    vlogger.error("All LLM providers failed, returning fallback response")
+    return _get_fallback_llm_response(prompt)
 
 
-# # Use Anthropic Claude 3.7 Sonnet Extended Thinking
-# def call_llm(prompt, use_cache: bool = True):
-#     from anthropic import Anthropic
-#     client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", "your-api-key"))
-#     response = client.messages.create(
-#         model="claude-3-7-sonnet-20250219",
-#         max_tokens=21000,
-#         thinking={
-#             "type": "enabled",
-#             "budget_tokens": 20000
-#         },
-#         messages=[
-#             {"role": "user", "content": prompt}
-#         ]
-#     )
-#     return response.content[1].text
-
-# Use OpenAI o1
-def call_llm(prompt, use_cache: bool = True):
+def _call_openai(prompt, timeout):
+    """Call OpenAI with timeout handling."""
     try:
         from openai import OpenAI
+        import signal
         
-        # Log that we're starting the LLM call
-        logger.info(f"Starting LLM call, use_cache={use_cache}")
+        def timeout_handler(signum, frame):
+            raise TimeoutError("OpenAI request timed out")
         
-        # Calculate approximate token count (rough estimate)
-        def estimate_tokens(text):
-            # Average English text has ~4 characters per token
-            return len(text) // 4
+        # Set timeout alarm
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
         
-        # Check if the prompt is too large (8k tokens is a safe limit for most models)
-        max_tokens = 8000
-        estimated_tokens = estimate_tokens(prompt)
-        
-        if estimated_tokens > max_tokens:
-            logger.warning(f"Prompt too large: ~{estimated_tokens} tokens. Truncating to ~{max_tokens} tokens.")
-            # Keep first and last parts of the prompt
-            chars_to_keep = max_tokens * 4
-            first_part = prompt[:chars_to_keep // 2]
-            last_part = prompt[-(chars_to_keep // 2):]
-            prompt = first_part + "\n\n[...content truncated due to length...]\n\n" + last_part
-        
-        # Log that we're creating the OpenAI client
-        logger.info("Creating OpenAI client")
-        
-        # Explicitly set only the required parameters for OpenAI client
-        # This prevents any system-level proxy settings from being passed
-        client_kwargs = {
-            "api_key": os.environ.get("OPENAI_API_KEY", "your-api-key"),
-            "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1")
-        }
-        
-        # Create client with only the supported parameters
-        client = OpenAI(**client_kwargs)
-        
-        # Log that we're making the API call
-        logger.info("Making API call to OpenAI")
-        
-        r = client.chat.completions.create(
-            model="o1",
-            messages=[{"role": "user", "content": prompt}],
-            reasoning_effort="medium",
-            store=False
-        )
-        
-        # Log successful completion
-        logger.info("Successfully received response from OpenAI")
-        
-        return r.choices[0].message.content
-        
+        try:
+            client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                timeout=timeout
+            )
+            return response.choices[0].message.content
+        finally:
+            signal.alarm(0)  # Cancel the alarm
+            
+    except ImportError:
+        raise Exception("OpenAI library not installed")
+    except TimeoutError:
+        raise TimeoutError("OpenAI request timed out")
     except Exception as e:
-        print(  f"Error in call_llm: {str(e)}")
-        # Log the exception details
-        error_message = f"Error in call_llm: {str(e)}"
-        logger.error(error_message)
-        logger.error(f"Exception type: {type(e).__name__}")
-        
-        # Log additional context that might help diagnose the issue
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        if "proxies" in str(e):
-            logger.error("This appears to be a proxy configuration error. Make sure your system proxy settings are correctly configured.")
-        
-        # Return a fallback response or re-raise the exception
-        fallback_response = "I'm sorry, but I encountered an error while processing your request. Please try again later."
-        logger.info(f"Returning fallback response: {fallback_response}")
-        return fallback_response
+        raise Exception(f"OpenAI error: {str(e)}")
 
-# Use OpenRouter API
-# def call_llm(prompt: str, use_cache: bool = True) -> str:
-#     # Log the prompt
-#     logger.info(f"PROMPT: {prompt}")
 
-#     # Check cache if enabled
-#     if use_cache:
-#         # Load cache from disk
-#         cache = {}
-#         if os.path.exists(cache_file):
-#             try:
-#                 with open(cache_file, "r") as f:
-#                     cache = json.load(f)
-#             except:
-#                 logger.warning(f"Failed to load cache, starting with empty cache")
+def _call_anthropic(prompt, timeout):
+    """Call Anthropic with timeout handling."""
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        response = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4000,
+            timeout=timeout
+        )
+        return response.content[0].text
+    except ImportError:
+        raise Exception("Anthropic library not installed")
+    except Exception as e:
+        raise Exception(f"Anthropic error: {str(e)}")
 
-#         # Return from cache if exists
-#         if prompt in cache:
-#             logger.info(f"RESPONSE: {cache[prompt]}")
-#             return cache[prompt]
 
-#     # OpenRouter API configuration
-#     api_key = os.getenv("OPENROUTER_API_KEY", "")
-#     model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+def _call_google(prompt, timeout):
+    """Call Google Generative AI with timeout handling."""
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(prompt)
+        return response.text
+    except ImportError:
+        raise Exception("Google Generative AI library not installed")
+    except Exception as e:
+        raise Exception(f"Google AI error: {str(e)}")
+
+
+def _get_fallback_llm_response(prompt):
+    """Generate a structured fallback response when all LLM providers fail."""
+    vlogger = get_verbose_logger()
+    vlogger.warning("Generating fallback LLM response due to provider failures")
     
-#     headers = {
-#         "Authorization": f"Bearer {api_key}",
-#     }
+    # Analyze the prompt to determine response type
+    if "dependency compatibility" in prompt.lower():
+        return _get_fallback_dependency_response()
+    elif "spring migration" in prompt.lower():
+        return _get_fallback_migration_response()
+    elif "migration plan" in prompt.lower():
+        return _get_fallback_plan_response()
+    else:
+        return _get_fallback_generic_response()
 
-#     data = {
-#         "model": model,
-#         "messages": [{"role": "user", "content": prompt}]
-#     }
 
-#     response = requests.post(
-#         "https://openrouter.ai/api/v1/chat/completions",
-#         headers=headers,
-#         json=data
-#     )
+def _get_fallback_dependency_response():
+    """Fallback response for dependency analysis."""
+    return json.dumps({
+        "analysis_status": "fallback_analysis",
+        "dependencies": {
+            "analyzed": 0,
+            "compatible": [],
+            "migration_required": [],
+            "incompatible": []
+        },
+        "recommendations": [
+            "Manual dependency review required due to LLM timeout",
+            "Check Spring Boot compatibility matrix",
+            "Review each dependency individually"
+        ],
+        "confidence": "low",
+        "manual_review_required": True
+    }, indent=2)
 
-#     if response.status_code != 200:
-#         error_msg = f"OpenRouter API call failed with status {response.status_code}: {response.text}"
-#         logger.error(error_msg)
-#         raise Exception(error_msg)
-#     try:
-#         response_text = response.json()["choices"][0]["message"]["content"]
-#     except Exception as e:
-#         error_msg = f"Failed to parse OpenRouter response: {e}; Response: {response.text}"
-#         logger.error(error_msg)        
-#         raise Exception(error_msg)
+
+def _get_fallback_migration_response():
+    """Fallback response for Spring migration analysis."""
+    return json.dumps({
+        "executive_summary": {
+            "migration_impact": "Manual analysis required due to LLM service timeout",
+            "key_blockers": ["LLM service timeout", "Large codebase requires manual review"],
+            "recommended_approach": "Break down analysis into smaller chunks and perform manual review"
+        },
+        "detailed_analysis": {
+            "framework_audit": {"current_versions": {}, "deprecated_apis": [], "third_party_compatibility": []},
+            "jakarta_migration": {"javax_usages": [], "mapping_required": {}, "incompatible_libraries": []},
+            "configuration_analysis": {"java_config_issues": [], "xml_config_issues": [], "deprecated_patterns": []},
+            "security_migration": {"websecurity_adapter_usage": [], "auth_config_changes": [], "deprecated_security_features": []},
+            "data_layer": {"jpa_issues": [], "repository_issues": [], "hibernate_compatibility": []},
+            "web_layer": {"controller_issues": [], "servlet_issues": [], "deprecated_web_features": []},
+            "testing": {"test_framework_issues": [], "deprecated_test_patterns": []},
+            "build_tooling": {"build_file_issues": [], "plugin_compatibility": [], "cicd_considerations": []}
+        },
+        "effort_estimation": {
+            "total_effort": "Manual estimation required due to timeout",
+            "by_category": {},
+            "priority_levels": {"high": ["Manual code review required"], "medium": [], "low": []}
+        },
+        "migration_roadmap": [
+            {
+                "step": 1,
+                "title": "Manual Analysis",
+                "description": "Perform manual analysis due to LLM timeout",
+                "estimated_effort": "TBD"
+            }
+        ]
+    }, indent=2)
+
+
+def _get_fallback_plan_response():
+    """Fallback response for migration plan generation."""
+    return json.dumps({
+        "migration_plan": {
+            "total_effort": "Manual estimation required",
+            "team_size": "2-4 developers",
+            "timeline": "TBD",
+            "phases": [
+                {
+                    "phase": 1,
+                    "title": "Manual Assessment",
+                    "description": "Perform manual analysis due to LLM service issues"
+                }
+            ]
+        },
+        "recommendations": [
+            "Break down large codebase into smaller modules",
+            "Perform manual dependency analysis",
+            "Use incremental migration approach"
+        ]
+    }, indent=2)
+
+
+def _get_fallback_generic_response():
+    """Generic fallback response."""
+    return json.dumps({
+        "status": "error",
+        "message": "LLM service timeout",
+        "recommendation": "Manual analysis required",
+        "fallback_analysis": True
+    }, indent=2)
+
+
+# Simple in-memory cache
+_response_cache = {}
+
+
+def _get_cached_response(cache_key):
+    """Get cached response if available."""
+    return _response_cache.get(cache_key)
+
+
+def _cache_response(cache_key, response):
+    """Cache successful response."""
+    # Limit cache size to prevent memory issues
+    if len(_response_cache) > 100:
+        # Remove oldest entries
+        keys_to_remove = list(_response_cache.keys())[:20]
+        for key in keys_to_remove:
+            del _response_cache[key]
     
+    _response_cache[cache_key] = response
 
-#     # Log the response
-#     logger.info(f"RESPONSE: {response_text}")
 
-#     # Update cache if enabled
-#     if use_cache:
-#         # Load cache again to avoid overwrites
-#         cache = {}
-#         if os.path.exists(cache_file):
-#             try:
-#                 with open(cache_file, "r") as f:
-#                     cache = json.load(f)
-#             except:
+# Rate limiting for concurrent requests
+_last_request_time = 0
+_request_count = 0
+_rate_limit_window = 60  # seconds
+_max_requests_per_window = 20
 
-#                 pass
 
-#         # Add to cache and save
-#         cache[prompt] = response_text
-#         try:
-#             with open(cache_file, "w") as f:
-#                 json.dump(cache, f)
-#         except Exception as e:
-#             logger.error(f"Failed to save cache: {e}")
+def apply_rate_limiting():
+    """Apply rate limiting to prevent overwhelming LLM services."""
+    global _last_request_time, _request_count
+    
+    current_time = time.time()
+    
+    # Reset counter if window has passed
+    if current_time - _last_request_time > _rate_limit_window:
+        _request_count = 0
+        _last_request_time = current_time
+    
+    # Check if we've hit the rate limit
+    if _request_count >= _max_requests_per_window:
+        wait_time = _rate_limit_window - (current_time - _last_request_time)
+        if wait_time > 0:
+            vlogger = get_verbose_logger()
+            vlogger.warning(f"Rate limit reached, waiting {wait_time:.1f}s")
+            time.sleep(wait_time)
+            _request_count = 0
+            _last_request_time = time.time()
+    
+    _request_count += 1
 
-#     return response_text
+
+def configure_for_large_repository():
+    """Configure LLM settings for large repository analysis."""
+    global DEFAULT_TIMEOUT, MAX_CONTEXT_LENGTH, _max_requests_per_window
+    
+    DEFAULT_TIMEOUT = 600  # 10 minutes for very large prompts
+    MAX_CONTEXT_LENGTH = 50000  # Reduce context for large repos
+    _max_requests_per_window = 10  # More conservative rate limiting
+    
+    vlogger = get_verbose_logger()
+    vlogger.optimization_applied("Large repository LLM configuration", 
+                                f"timeout={DEFAULT_TIMEOUT}s, context={MAX_CONTEXT_LENGTH}, rate_limit={_max_requests_per_window}/min")
 
 if __name__ == "__main__":
     test_prompt = "Hello, how are you?"

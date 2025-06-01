@@ -6,6 +6,7 @@ Enhanced with large repository handling capabilities:
 - Concurrent analysis support
 - Resource optimization
 - Performance monitoring
+- Verbose logging for detailed progress tracking
 """
 
 import argparse
@@ -13,6 +14,7 @@ import sys
 import os
 from flow import create_spring_migration_flow
 from utils.performance_monitor import enable_performance_monitoring, get_performance_monitor
+from utils.verbose_logger import enable_verbose_logging, get_verbose_logger
 
 
 def create_shared_state(args):
@@ -20,6 +22,13 @@ def create_shared_state(args):
     
     # Enable performance monitoring if requested
     enable_performance_monitoring(enable_detailed_tracking=not args.disable_performance_monitoring)
+    
+    # Enable verbose logging if requested
+    if args.verbose:
+        enable_verbose_logging(show_timestamps=True)
+        vlogger = get_verbose_logger()
+        vlogger.section_header("Spring Migration Tool - Verbose Mode")
+        vlogger.log("Initializing shared state and configuration")
     
     shared = {
         # Repository settings
@@ -43,6 +52,7 @@ def create_shared_state(args):
         "output_dir": args.output,
         "use_cache": not args.no_cache,
         "git_integration": args.git_integration,
+        "verbose_mode": args.verbose,
         
         # Performance optimization settings
         "enable_optimization": not args.disable_optimization,
@@ -56,11 +66,59 @@ def create_shared_state(args):
         "detailed_analysis": not args.quick_analysis,
     }
     
+    # Auto-configure for large repositories if directory analysis shows many files
+    if args.dir and not args.max_files:
+        # Quick scan to estimate repository size
+        import glob
+        estimated_java_files = len(glob.glob(os.path.join(args.dir, "**/*.java"), recursive=True))
+        
+        if estimated_java_files > 500:
+            print(f"🔍 Large repository detected ({estimated_java_files} Java files)")
+            print("🔧 Auto-configuring for large repository analysis...")
+            
+            # Auto-enable optimizations for large repos
+            if not args.parallel:
+                shared["enable_parallel_processing"] = True
+                print("   ✅ Enabled parallel processing")
+            
+            # Set reasonable file limit to prevent timeouts
+            if not args.max_files:
+                recommended_limit = min(800, max(200, estimated_java_files // 2))
+                shared["max_files_for_analysis"] = recommended_limit
+                print(f"   📊 Set file analysis limit to {recommended_limit} files")
+            
+            # Force quick analysis for very large repos
+            if estimated_java_files > 1000 and not args.quick_analysis:
+                shared["detailed_analysis"] = False
+                print("   🏃 Switched to quick analysis mode for performance")
+            
+            # Configure LLM for large repositories
+            from utils.call_llm import configure_for_large_repository
+            configure_for_large_repository()
+            print("   ⚙️ Configured LLM settings for large repository")
+            
+            if args.verbose:
+                vlogger = get_verbose_logger()
+                vlogger.optimization_applied("Large repository auto-configuration", 
+                                            f"{estimated_java_files} Java files detected")
+                vlogger.debug(f"Auto-configured settings: parallel={shared['enable_parallel_processing']}, max_files={shared.get('max_files_for_analysis')}")
+    
+    if args.verbose:
+        vlogger = get_verbose_logger()
+        vlogger.debug(f"Repository source: {'URL' if args.repo else 'Local directory'}")
+        vlogger.debug(f"File patterns: {len(shared['include_patterns'])} include, {len(shared['exclude_patterns'])} exclude")
+        vlogger.debug(f"Performance settings: parallel={shared['enable_parallel_processing']}, workers={args.max_workers}")
+        vlogger.debug(f"Analysis mode: {'Quick' if not shared['detailed_analysis'] else 'Detailed'}")
+    
     return shared
 
 
 def validate_arguments(args):
     """Validate command line arguments."""
+    vlogger = get_verbose_logger()
+    
+    if args.verbose:
+        vlogger.step("Validating command line arguments")
     
     if not args.repo and not args.dir:
         print("❌ Error: Either --repo or --dir must be specified")
@@ -87,50 +145,67 @@ def validate_arguments(args):
         print("❌ Error: --max-files must be at least 10")
         return False
     
+    if args.verbose:
+        vlogger.success("All command line arguments validated successfully")
+    
     return True
 
 
 def print_performance_tips(args):
     """Print performance optimization tips based on arguments."""
+    vlogger = get_verbose_logger()
     
-    print("\n💡 Performance Optimization Tips:")
+    if args.verbose:
+        vlogger.subsection_header("Performance Optimization Tips")
+    else:
+        print("\n💡 Performance Optimization Tips:")
     
+    tips = []
     if not args.parallel:
-        print("   🚀 Use --parallel for faster analysis of large repositories")
+        tips.append("🚀 Use --parallel for faster analysis of large repositories")
     
     if not args.max_files:
-        print("   📊 Use --max-files N to limit analysis scope for very large repos")
+        tips.append("📊 Use --max-files N to limit analysis scope for very large repos")
     
     if args.disable_optimization:
-        print("   ⚡ Remove --disable-optimization to enable automatic optimizations")
+        tips.append("⚡ Remove --disable-optimization to enable automatic optimizations")
     
     if args.disable_performance_monitoring:
-        print("   📈 Remove --disable-performance-monitoring to track analysis metrics")
+        tips.append("📈 Remove --disable-performance-monitoring to track analysis metrics")
     
-    print("   💾 Use --no-cache to disable LLM response caching (slower but more current)")
-    print("   🏃 Use --quick-analysis for faster but less detailed analysis")
+    tips.extend([
+        "💾 Use --no-cache to disable LLM response caching (slower but more current)",
+        "🏃 Use --quick-analysis for faster but less detailed analysis",
+        "🔍 Use --verbose to see detailed progress and internal operations"
+    ])
+    
+    for tip in tips:
+        if args.verbose:
+            vlogger.log(tip)
+        else:
+            print(f"   {tip}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AI-Powered Spring 5 to 6 Migration Tool with Large Repository Support",
+        description="AI-Powered Spring 5 to 6 Migration Tool with Large Repository Support and Verbose Logging",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Analyze local Spring project
-  python main.py --dir /path/to/spring/project
+  # Analyze local Spring project with verbose output
+  python main.py --dir /path/to/spring/project --verbose
 
-  # Analyze with change application
-  python main.py --dir /path/to/spring/project --apply-changes
+  # Analyze with change application and detailed logging
+  python main.py --dir /path/to/spring/project --apply-changes --verbose
 
-  # Large repository with optimizations
-  python main.py --dir /path/to/large/project --parallel --max-files 500 --batch-size 20
+  # Large repository with optimizations and verbose mode
+  python main.py --dir /path/to/large/project --parallel --max-files 500 --batch-size 20 --verbose
 
-  # Quick analysis with performance monitoring
-  python main.py --dir /path/to/project --quick-analysis --max-workers 8
+  # Quick analysis with performance monitoring and verbose output
+  python main.py --dir /path/to/project --quick-analysis --max-workers 8 --verbose
 
-  # Full analysis with Git integration
-  python main.py --dir /path/to/project --apply-changes --git-integration
+  # Full analysis with Git integration and verbose logging
+  python main.py --dir /path/to/project --apply-changes --git-integration --verbose
         """
     )
     
@@ -157,6 +232,10 @@ Examples:
     parser.add_argument("--quick-analysis", action="store_true",
                        help="Perform faster but less detailed analysis")
     
+    # Verbose logging
+    parser.add_argument("-v", "--verbose", action="store_true",
+                       help="Enable verbose logging to see detailed progress and internal operations")
+    
     # Performance optimization options
     perf_group = parser.add_argument_group("Performance Options")
     perf_group.add_argument("--parallel", action="store_true",
@@ -178,16 +257,29 @@ Examples:
     if not validate_arguments(args):
         sys.exit(1)
     
+    # Initialize verbose logging early if requested
+    if args.verbose:
+        enable_verbose_logging(show_timestamps=True)
+        vlogger = get_verbose_logger()
+        vlogger.section_header("AI-Powered Spring Migration Tool")
+        vlogger.log("Verbose mode enabled - showing detailed progress")
+    
     # Print startup information
     print("🚀 AI-Powered Spring Migration Tool")
     print("=" * 50)
     
     if args.repo:
         print(f"📂 Repository: {args.repo}")
+        if args.verbose:
+            vlogger.debug(f"Repository URL: {args.repo}")
     else:
         print(f"📁 Directory: {args.dir}")
+        if args.verbose:
+            vlogger.debug(f"Local directory: {args.dir}")
     
     print(f"📤 Output: {args.output}")
+    if args.verbose:
+        vlogger.debug(f"Output directory: {args.output}")
     
     # Performance settings summary
     print(f"\n⚡ Performance Settings:")
@@ -197,6 +289,7 @@ Examples:
     print(f"   Max Files: {args.max_files or 'Unlimited'}")
     print(f"   Optimizations: {'✅' if not args.disable_optimization else '❌'}")
     print(f"   Performance Monitoring: {'✅' if not args.disable_performance_monitoring else '❌'}")
+    print(f"   Verbose Logging: {'✅' if args.verbose else '❌'}")
     
     # Analysis settings
     print(f"\n🔍 Analysis Settings:")
@@ -204,6 +297,13 @@ Examples:
     print(f"   Git Integration: {'✅' if args.git_integration else '❌'}")
     print(f"   LLM Caching: {'✅' if not args.no_cache else '❌'}")
     print(f"   Analysis Mode: {'Quick' if args.quick_analysis else 'Detailed'}")
+    
+    if args.verbose:
+        vlogger.subsection_header("Configuration Summary")
+        vlogger.debug(f"Workers: {args.max_workers}, Batch: {args.batch_size}")
+        vlogger.debug(f"Cache enabled: {not args.no_cache}")
+        vlogger.debug(f"Apply changes: {args.apply_changes}")
+        vlogger.debug(f"Git integration: {args.git_integration}")
     
     # Show performance tips
     if not args.disable_optimization:
@@ -213,21 +313,32 @@ Examples:
     
     try:
         # Create shared state
+        if args.verbose:
+            vlogger.step("Creating shared state configuration")
         shared = create_shared_state(args)
         
         # Create and run the migration flow
         print("🎯 Starting Spring migration analysis...")
+        if args.verbose:
+            vlogger.step("Initializing migration flow")
         flow = create_spring_migration_flow()
         
         # Start performance monitoring
         monitor = get_performance_monitor()
         monitor.start_operation("complete_migration_analysis")
         
+        if args.verbose:
+            vlogger.start_operation("complete_migration_analysis", "Full Spring migration workflow")
+        
         try:
+            if args.verbose:
+                vlogger.step("Executing migration flow")
             flow.run(shared)
             
             # Analysis completed successfully
             print("\n✅ Spring migration analysis completed successfully!")
+            if args.verbose:
+                vlogger.success("Spring migration analysis completed successfully")
             
             # Print final output location
             output_dir = shared.get("final_output_dir", args.output)
@@ -235,6 +346,10 @@ Examples:
             print(f"   📄 Detailed analysis: {shared['project_name']}_spring_migration_report.json")
             print(f"   📋 Summary: {shared['project_name']}_migration_summary.md")
             print(f"   📊 Performance: {shared['project_name']}_performance_report.json")
+            
+            if args.verbose:
+                vlogger.debug(f"Reports saved to: {output_dir}")
+                vlogger.debug(f"Project name: {shared.get('project_name', 'unknown')}")
             
             # Print change summary if changes were applied
             if args.apply_changes and "applied_changes" in shared:
@@ -247,10 +362,18 @@ Examples:
                 print(f"   ✅ Applied: {successful}")
                 print(f"   ⏭️  Skipped: {skipped}")
                 print(f"   ❌ Failed: {failed}")
+                
+                if args.verbose:
+                    vlogger.subsection_header("Change Application Results")
+                    vlogger.performance_metric("Applied changes", successful)
+                    vlogger.performance_metric("Skipped changes", skipped)
+                    vlogger.performance_metric("Failed changes", failed)
             
         except Exception as flow_error:
             # Store the flow exception to re-raise after cleanup
             print(f"\n❌ Error during flow execution: {flow_error}")
+            if args.verbose:
+                vlogger.error("Flow execution failed", flow_error)
             raise flow_error
             
         finally:
@@ -259,6 +382,9 @@ Examples:
                 # Safely get total files with fallback
                 total_files = len(shared.get("files", [])) if 'shared' in locals() and shared else 0
                 monitor.end_operation("complete_migration_analysis", files_processed=total_files)
+                
+                if args.verbose:
+                    vlogger.end_operation("complete_migration_analysis", details=f"{total_files} files processed")
                 
                 # Print final performance summary
                 if not args.disable_performance_monitoring:
@@ -270,6 +396,14 @@ Examples:
                     print(f"   💾 Peak Memory: {perf_summary['peak_memory_mb']:.1f} MB")
                     print(f"   🚀 Processing Rate: {perf_summary['files_per_second']:.1f} files/sec")
                     
+                    if args.verbose:
+                        vlogger.subsection_header("Final Performance Metrics")
+                        vlogger.performance_metric("Total duration", perf_summary['overall_duration'], "seconds")
+                        vlogger.performance_metric("Files processed", perf_summary['total_files_processed'])
+                        vlogger.performance_metric("LLM calls", perf_summary['total_llm_calls'])
+                        vlogger.performance_metric("Peak memory", perf_summary['peak_memory_mb'], "MB")
+                        vlogger.performance_metric("Processing rate", perf_summary['files_per_second'], "files/sec")
+                    
                     # Show optimization recommendations
                     optimizations = perf_summary.get('optimization_recommendations', [])
                     if optimizations:
@@ -277,14 +411,25 @@ Examples:
                         for opt in optimizations[:3]:  # Show top 3
                             print(f"   {opt}")
                         
+                        if args.verbose:
+                            vlogger.subsection_header("Optimization Recommendations")
+                            for i, opt in enumerate(optimizations):
+                                vlogger.optimization_applied(f"Recommendation {i+1}", opt)
+                        
                         if len(optimizations) > 3:
                             print(f"   ... and {len(optimizations) - 3} more (see performance report)")
                 
                 # Stop monitoring
                 monitor.stop_monitoring()
                 
+                # Show verbose summary
+                if args.verbose:
+                    vlogger.show_summary()
+                
             except Exception as cleanup_error:
                 print(f"Warning: Error during cleanup: {cleanup_error}")
+                if args.verbose:
+                    vlogger.warning(f"Cleanup error: {cleanup_error}")
                 # Still try to stop monitoring
                 try:
                     monitor.stop_monitoring()
@@ -293,6 +438,8 @@ Examples:
             
     except KeyboardInterrupt:
         print("\n⏹️ Analysis interrupted by user")
+        if args.verbose:
+            vlogger.warning("Analysis interrupted by user (Ctrl+C)")
         monitor = get_performance_monitor()
         monitor.stop_monitoring()
         sys.exit(1)
@@ -300,6 +447,10 @@ Examples:
     except Exception as e:
         print(f"\n❌ Error during analysis: {e}")
         print("Please check the error details and try again.")
+        
+        if args.verbose:
+            vlogger.error("Analysis failed", e)
+            vlogger.show_summary()
         
         # Still try to stop monitoring gracefully
         try:

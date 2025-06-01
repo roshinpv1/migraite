@@ -11,6 +11,7 @@ from utils.performance_monitor import (
     ResourceOptimizer,
     ConcurrentAnalysisManager
 )
+from utils.verbose_logger import get_verbose_logger
 
 
 # Helper to get content for specific file indices
@@ -27,6 +28,11 @@ def get_content_for_indices(files_data, indices):
 
 class FetchRepo(Node):
     def prep(self, shared):
+        vlogger = get_verbose_logger()
+        
+        if shared.get("verbose_mode"):
+            vlogger.step("Preparing repository fetch configuration")
+        
         repo_url = shared.get("repo_url")
         local_dir = shared.get("local_dir")
         project_name = shared.get("project_name")
@@ -38,6 +44,9 @@ class FetchRepo(Node):
             else:
                 project_name = os.path.basename(os.path.abspath(local_dir))
             shared["project_name"] = project_name
+            
+            if shared.get("verbose_mode"):
+                vlogger.debug(f"Derived project name: {project_name}")
 
         # Get file patterns directly from shared
         include_patterns = shared["include_patterns"]
@@ -47,6 +56,13 @@ class FetchRepo(Node):
         # Performance optimization settings
         enable_optimization = shared.get("enable_optimization", True)
         max_files_for_analysis = shared.get("max_files_for_analysis", None)
+
+        if shared.get("verbose_mode"):
+            vlogger.debug(f"File patterns: {len(include_patterns)} include, {len(exclude_patterns)} exclude")
+            vlogger.debug(f"Max file size: {max_file_size / 1024 / 1024:.1f} MB")
+            vlogger.debug(f"Optimization enabled: {enable_optimization}")
+            if max_files_for_analysis:
+                vlogger.debug(f"File limit: {max_files_for_analysis} files")
 
         return {
             "repo_url": repo_url,
@@ -58,14 +74,27 @@ class FetchRepo(Node):
             "use_relative_paths": True,
             "enable_optimization": enable_optimization,
             "max_files_for_analysis": max_files_for_analysis,
+            "verbose_mode": shared.get("verbose_mode", False)
         }
 
     def exec(self, prep_res):
         monitor = get_performance_monitor()
+        vlogger = get_verbose_logger()
+        
         monitor.start_operation("fetch_repository")
+        
+        if prep_res["verbose_mode"]:
+            vlogger.start_operation("fetch_repository", "Fetching and processing repository files")
         
         if prep_res["repo_url"]:
             print(f"Crawling repository: {prep_res['repo_url']}...")
+            if prep_res["verbose_mode"]:
+                vlogger.debug(f"Fetching from GitHub: {prep_res['repo_url']}")
+                if prep_res["token"]:
+                    vlogger.debug("Using authentication token")
+                else:
+                    vlogger.warning("No GitHub token provided - may hit rate limits")
+            
             result = crawl_github_files(
                 repo_url=prep_res["repo_url"],
                 token=prep_res["token"],
@@ -76,6 +105,8 @@ class FetchRepo(Node):
             )
         else:
             print(f"Crawling directory: {prep_res['local_dir']}...")
+            if prep_res["verbose_mode"]:
+                vlogger.debug(f"Processing local directory: {prep_res['local_dir']}")
 
             result = crawl_local_files(
                 directory=prep_res["local_dir"],
@@ -88,37 +119,82 @@ class FetchRepo(Node):
         # Convert dict to list of tuples: [(path, content), ...]
         files_list = list(result.get("files", {}).items())
         if len(files_list) == 0:
+            if prep_res["verbose_mode"]:
+                vlogger.error("No files found matching criteria")
             raise (ValueError("Failed to fetch files"))
+        
+        if prep_res["verbose_mode"]:
+            vlogger.debug(f"Initial file count: {len(files_list)}")
+            # Show sample of files found
+            sample_files = files_list[:5]
+            for path, content in sample_files:
+                file_size = len(content) / 1024  # KB
+                vlogger.file_processing(path, "Found", f"{file_size:.1f} KB")
+            if len(files_list) > 5:
+                vlogger.debug(f"... and {len(files_list) - 5} more files")
         
         # Performance optimization: filter files if enabled
         if prep_res["enable_optimization"] and prep_res["max_files_for_analysis"]:
+            if prep_res["verbose_mode"]:
+                vlogger.step("Applying file filtering optimization")
+            
+            original_count = len(files_list)
             files_list = ResourceOptimizer.filter_files_for_analysis(
                 files_list, 
                 max_files=prep_res["max_files_for_analysis"],
                 prioritize_spring_files=True
             )
+            
+            if prep_res["verbose_mode"]:
+                filtered_count = len(files_list)
+                vlogger.optimization_applied(
+                    f"File filtering: {original_count} → {filtered_count} files",
+                    f"Reduced by {original_count - filtered_count} files"
+                )
         
         print(f"Fetched {len(files_list)} files.")
+        if prep_res["verbose_mode"]:
+            vlogger.success(f"Successfully fetched {len(files_list)} files")
         
         # Generate analysis estimates
         if prep_res["enable_optimization"]:
+            if prep_res["verbose_mode"]:
+                vlogger.step("Generating analysis estimates")
+            
             estimates = ResourceOptimizer.estimate_analysis_requirements(files_list)
             print(f"📊 Analysis Estimates:")
             print(f"   Files: {estimates['total_files']} ({estimates['total_size_mb']:.1f} MB)")
             print(f"   Estimated Duration: {estimates['estimated_duration_minutes']:.1f} minutes")
             print(f"   Estimated Memory: {estimates['estimated_memory_mb']:.1f} MB")
+            
+            if prep_res["verbose_mode"]:
+                vlogger.performance_metric("Estimated files", estimates['total_files'])
+                vlogger.performance_metric("Estimated size", estimates['total_size_mb'], "MB")
+                vlogger.performance_metric("Estimated duration", estimates['estimated_duration_minutes'], "minutes")
+                vlogger.performance_metric("Estimated memory", estimates['estimated_memory_mb'], "MB")
         
         monitor.end_operation("fetch_repository", files_processed=len(files_list))
+        
+        if prep_res["verbose_mode"]:
+            vlogger.end_operation("fetch_repository", details=f"{len(files_list)} files processed")
+        
         return files_list
 
     def post(self, shared, prep_res, exec_res):
-        shared["files"] = exec_res  # List of (path, content) tuples
+        vlogger = get_verbose_logger()
         
+        shared["files"] = exec_res  # List of (path, content) tuples
+
         # Store optimization settings for downstream nodes
         shared["optimization_settings"] = ResourceOptimizer.get_recommended_settings(
             total_files=len(exec_res),
             total_size=sum(len(content) for _, content in exec_res)
         )
+        
+        if shared.get("verbose_mode"):
+            vlogger.debug(f"Stored {len(exec_res)} files in shared state")
+            optimization_settings = shared["optimization_settings"]
+            vlogger.debug(f"Optimization settings: parallel={optimization_settings.get('enable_parallel_processing')}")
 
 
 # ==========================================
@@ -132,6 +208,11 @@ class SpringMigrationAnalyzer(Node):
     """
     
     def prep(self, shared):
+        vlogger = get_verbose_logger()
+        
+        if shared.get("verbose_mode"):
+            vlogger.step("Preparing Spring migration analysis")
+        
         files_data = shared["files"]
         project_name = shared["project_name"]
         use_cache = shared.get("use_cache", True)
@@ -625,13 +706,43 @@ Analyze the codebase thoroughly and provide the complete JSON response."""
         }
         return defaults.get(key, {})
     
-    def _get_fallback_analysis(self, prep_res, file_listing):
+    def _get_fallback_analysis(self, prep_res, file_listing, verbose_mode=False):
         """Generate a fallback analysis when LLM parsing fails."""
-        # Extract files data from prep_res
-        context, file_listing, project_name, use_cache = prep_res
+        vlogger = get_verbose_logger()
         
-        # Count files from file listing
-        file_count = len(file_listing.split('\n')) if file_listing else 0
+        if verbose_mode:
+            vlogger.step("Generating fallback analysis due to LLM parsing failure")
+        
+        # Safely extract data from prep_res - handle the case where it might be None
+        if prep_res is None:
+            context = ""
+            project_name = "unknown_project"
+            use_cache = True
+            file_count = 0
+        else:
+            try:
+                if isinstance(prep_res, tuple) and len(prep_res) >= 4:
+                    context, file_listing_from_prep, project_name, use_cache = prep_res[:4]
+                else:
+                    # Handle unexpected prep_res format
+                    context = str(prep_res) if prep_res else ""
+                    project_name = "unknown_project"
+                    use_cache = True
+                
+                # Count files from file listing
+                file_count = len(file_listing.split('\n')) if file_listing else 0
+                
+            except Exception as e:
+                if verbose_mode:
+                    vlogger.error("Error extracting data from prep_res", e)
+                # Use safe defaults
+                context = ""
+                project_name = "unknown_project"
+                use_cache = True
+                file_count = 0
+        
+        if verbose_mode:
+            vlogger.debug(f"Fallback analysis for {file_count} files in project: {project_name}")
         
         # Determine project size and base estimates
         if file_count < 10:
@@ -644,41 +755,107 @@ Analyze the codebase thoroughly and provide the complete JSON response."""
             base_effort = "15-25 person-days"
             team_size = "2-3 developers"
             timeline = "4-8 weeks"
-        else:
+        elif file_count < 200:
             project_size = "Large"
             base_effort = "30-45 person-days"
             team_size = "3-4 developers" 
             timeline = "2-3 months"
+        else:
+            # Very large repository
+            project_size = "Very Large"
+            base_effort = "60-120 person-days"
+            team_size = "4-8 developers"
+            timeline = "3-6 months"
         
-        # Create a fallback response with realistic estimates
+        if verbose_mode:
+            vlogger.debug(f"Classified as {project_size} project: {base_effort}, {team_size}, {timeline}")
+        
+        # Enhanced fallback analysis for large repositories
+        if file_count > 500:
+            # Special handling for very large repositories
+            fallback_reason = f"LLM timeout on large repository ({file_count} files) - automated analysis not feasible"
+            recommendations = [
+                f"Break down analysis into smaller modules (recommend max 100 files per analysis)",
+                "Use incremental migration approach by module/package",
+                "Consider parallel team analysis of different modules",
+                f"Estimated {file_count} files requires enterprise migration planning",
+                "Manual review of critical paths recommended before automated changes"
+            ]
+        else:
+            fallback_reason = f"LLM response parsing failed for {file_count} files - manual review recommended"
+            recommendations = [
+                "Manual code review recommended due to analysis parsing issues",
+                "Check Spring Boot compatibility matrix",
+                "Review dependency versions manually",
+                "Consider using smaller file batches for analysis"
+            ]
+        
+        # Create a comprehensive fallback response
         fallback_analysis = {
             "executive_summary": {
-                "migration_impact": f"Analysis of {file_count} files indicates a {project_size.lower()} project requiring Spring 5 to 6 migration. Based on project size, estimated effort is {base_effort}. LLM analysis encountered parsing issues, manual review recommended.",
-                "key_blockers": ["LLM response parsing failed - manual code review required", "Potential javax.* to jakarta.* namespace changes", "Spring Security configuration updates may be needed"],
-                "recommended_approach": f"Phased migration approach recommended for {project_size.lower()} projects. Start with dependency updates, then tackle deprecated APIs systematically. Consider manual code review due to analysis parsing issues."
+                "migration_impact": f"Analysis of {file_count} files in {project_name} indicates a {project_size.lower()} Spring migration project. {fallback_reason}",
+                "key_blockers": [
+                    fallback_reason,
+                    "Potential javax.* to jakarta.* namespace changes",
+                    "Spring Security configuration updates may be needed",
+                    f"Large codebase ({file_count} files) requires structured approach"
+                ],
+                "recommended_approach": f"Phased migration approach recommended for {project_size.lower()} projects. Start with dependency updates, then tackle deprecated APIs systematically. Manual planning required due to analysis issues."
             },
             "detailed_analysis": {
-                "framework_audit": {"current_versions": {}, "deprecated_apis": [], "third_party_compatibility": []},
-                "jakarta_migration": {"javax_usages": [], "mapping_required": {}, "incompatible_libraries": []},
-                "configuration_analysis": {"java_config_issues": [], "xml_config_issues": [], "deprecated_patterns": []},
-                "security_migration": {"websecurity_adapter_usage": [], "auth_config_changes": [], "deprecated_security_features": []},
-                "data_layer": {"jpa_issues": [], "repository_issues": [], "hibernate_compatibility": []},
-                "web_layer": {"controller_issues": [], "servlet_issues": [], "deprecated_web_features": []},
-                "testing": {"test_framework_issues": [], "deprecated_test_patterns": []},
-                "build_tooling": {"build_file_issues": [], "plugin_compatibility": [], "cicd_considerations": []}
+                "framework_audit": {
+                    "current_versions": {"analysis_status": "failed", "reason": "LLM timeout"},
+                    "deprecated_apis": [],
+                    "third_party_compatibility": []
+                },
+                "jakarta_migration": {
+                    "javax_usages": [],
+                    "mapping_required": {"analysis_status": "manual_review_required"},
+                    "incompatible_libraries": []
+                },
+                "configuration_analysis": {
+                    "java_config_issues": [],
+                    "xml_config_issues": [],
+                    "deprecated_patterns": []
+                },
+                "security_migration": {
+                    "websecurity_adapter_usage": [],
+                    "auth_config_changes": [],
+                    "deprecated_security_features": []
+                },
+                "data_layer": {
+                    "jpa_issues": [],
+                    "repository_issues": [],
+                    "hibernate_compatibility": []
+                },
+                "web_layer": {
+                    "controller_issues": [],
+                    "servlet_issues": [],
+                    "deprecated_web_features": []
+                },
+                "testing": {
+                    "test_framework_issues": [],
+                    "deprecated_test_patterns": []
+                },
+                "build_tooling": {
+                    "build_file_issues": [],
+                    "plugin_compatibility": [],
+                    "cicd_considerations": []
+                }
             },
             "module_breakdown": [
                 {
                     "module_name": "main_application",
-                    "complexity": "Medium",
-                    "refactor_type": "Semi-manual",
-                    "issues": ["Manual review required due to analysis parsing issues"],
+                    "complexity": project_size,
+                    "refactor_type": "Manual-review-required",
+                    "issues": [fallback_reason],
                     "effort_estimate": base_effort
                 }
             ],
             "effort_estimation": {
                 "total_effort": base_effort,
                 "by_category": {
+                    "manual_analysis": f"{int(base_effort.split('-')[0]) // 2} person-days",
                     "jakarta_migration": f"{int(base_effort.split('-')[0]) // 3} person-days",
                     "security_updates": f"{int(base_effort.split('-')[0]) // 4} person-days",
                     "dependency_updates": f"{int(base_effort.split('-')[0]) // 4} person-days",
@@ -686,9 +863,15 @@ Analyze the codebase thoroughly and provide the complete JSON response."""
                     "build_config": f"{int(base_effort.split('-')[0]) // 6} person-days"
                 },
                 "priority_levels": {
-                    "high": [f"Manual code review of {file_count} files due to analysis parsing issues", "Dependency version updates", "Testing migration"],
-                    "medium": ["Configuration optimization", "Performance validation"],
-                    "low": ["Documentation updates", "Code style improvements"]
+                    "high": recommendations[:2],
+                    "medium": recommendations[2:4] if len(recommendations) > 3 else [],
+                    "low": recommendations[4:] if len(recommendations) > 4 else ["Documentation updates", "Code style improvements"]
+                },
+                "large_repository_considerations": {
+                    "file_count": file_count,
+                    "recommended_batch_size": min(100, max(20, file_count // 10)),
+                    "parallel_analysis_recommended": file_count > 200,
+                    "enterprise_planning_required": file_count > 500
                 }
             },
             "code_samples": {
@@ -699,34 +882,53 @@ Analyze the codebase thoroughly and provide the complete JSON response."""
             "migration_roadmap": [
                 {
                     "step": 1,
-                    "title": "Manual Code Review",
-                    "description": "Perform manual analysis due to automated parsing issues",
+                    "title": "Manual Planning & Analysis",
+                    "description": f"Perform manual analysis of {project_size.lower()} codebase due to automated analysis limitations",
                     "estimated_effort": f"{int(base_effort.split('-')[0]) // 4} person-days",
                     "dependencies": []
                 },
                 {
                     "step": 2,
-                    "title": "Dependency Updates",
-                    "description": "Update Spring Boot to 3.x and related dependencies",
-                    "estimated_effort": f"{int(base_effort.split('-')[0]) // 4} person-days",
+                    "title": "Module-by-Module Analysis",
+                    "description": "Break down large codebase into manageable modules for incremental analysis",
+                    "estimated_effort": f"{int(base_effort.split('-')[0]) // 3} person-days",
                     "dependencies": ["step-1"]
                 },
                 {
                     "step": 3,
-                    "title": "Jakarta Migration",
-                    "description": "Replace javax.* imports with jakarta.* equivalents",
-                    "estimated_effort": f"{int(base_effort.split('-')[0]) // 3} person-days",
+                    "title": "Dependency Updates",
+                    "description": "Update Spring Boot to 3.x and related dependencies module by module",
+                    "estimated_effort": f"{int(base_effort.split('-')[0]) // 4} person-days",
                     "dependencies": ["step-2"]
                 },
                 {
                     "step": 4,
-                    "title": "Testing and Validation",
-                    "description": "Comprehensive testing of migrated application",
+                    "title": "Jakarta Migration",
+                    "description": "Replace javax.* imports with jakarta.* equivalents incrementally",
                     "estimated_effort": f"{int(base_effort.split('-')[0]) // 3} person-days",
                     "dependencies": ["step-3"]
+                },
+                {
+                    "step": 5,
+                    "title": "Testing and Validation",
+                    "description": "Comprehensive testing of migrated application modules",
+                    "estimated_effort": f"{int(base_effort.split('-')[0]) // 3} person-days",
+                    "dependencies": ["step-4"]
                 }
-            ]
+            ],
+            "large_repository_recommendations": recommendations if file_count > 200 else [],
+            "analysis_metadata": {
+                "fallback_reason": fallback_reason,
+                "project_size_classification": project_size,
+                "file_count": file_count,
+                "requires_manual_review": True,
+                "automated_analysis_feasible": file_count < 200
+            }
         }
+        
+        if verbose_mode:
+            vlogger.success(f"Generated comprehensive fallback analysis for {project_size} project ({file_count} files)")
+        
         return fallback_analysis
     
     def post(self, shared, prep_res, exec_res):
