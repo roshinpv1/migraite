@@ -12,6 +12,11 @@ Enhanced with large repository handling capabilities:
 import argparse
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from flow import create_spring_migration_flow
 from utils.performance_monitor import enable_performance_monitoring, get_performance_monitor
 from utils.verbose_logger import enable_verbose_logging, get_verbose_logger
@@ -43,8 +48,7 @@ def create_shared_state(args):
         ],
         "exclude_patterns": [
             "*/target/*", "*/build/*", "*/.git/*", "*/.idea/*", 
-            "*/node_modules/*", "*.class", "*.jar", "*.war", "*.ear",
-            "*/test/*", "*/tests/*", "*Test.java", "*Tests.java"
+            "*/node_modules/*", "*.class", "*.jar", "*.war", "*.ear"
         ],
         "max_file_size": 1024 * 1024,  # 1MB max per file
         

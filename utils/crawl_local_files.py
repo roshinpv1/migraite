@@ -43,28 +43,14 @@ def crawl_local_files(
     print(f"Include patterns: {include_patterns}")
     print(f"Exclude patterns: {exclude_patterns}")
     
-    # Special handling for Excel files
-    excel_extensions = {'.xlsx', '.xls', '.xlsm', '.xlsb', '.csv'}
-    excel_folders = []
-    
-    # First pass: Find all files (including those in Excel folders)
+    # Find all files
     all_files = []
     for root, dirs, files in os.walk(directory):
-        # Check if this directory might be an Excel folder
-        dir_name = os.path.basename(root)
-        if any(dir_name.lower().endswith(ext.lower()) for ext in excel_extensions):
-            excel_folders.append(root)
-            print(f"Found potential Excel folder: {root}")
-            
         # Filter directories using .gitignore and exclude_patterns early
         excluded_dirs = set()
         for d in dirs:
             dirpath = os.path.join(root, d)
             dirpath_rel = os.path.relpath(dirpath, directory)
-
-            # Skip exclusion check for Excel folders to make sure we process all files
-            if any(dirpath.startswith(excel_folder) for excel_folder in excel_folders):
-                continue
 
             if gitignore_spec and gitignore_spec.match_file(dirpath_rel):
                 excluded_dirs.add(d)
@@ -78,12 +64,9 @@ def crawl_local_files(
                         break
 
         # Remove excluded directories to prevent walking into them
-        # But don't exclude Excel folders
         for d in excluded_dirs:
             if d in dirs:
-                dirpath = os.path.join(root, d)
-                if not any(dirpath.startswith(excel_folder) for excel_folder in excel_folders):
-                    dirs.remove(d)
+                dirs.remove(d)
 
         for filename in files:
             filepath = os.path.join(root, filename)
@@ -97,32 +80,28 @@ def crawl_local_files(
     for filepath in all_files:
         relpath = os.path.relpath(filepath, directory) if use_relative_paths else filepath
 
-        # Special handling for files in Excel folders - always include them
-        in_excel_folder = any(filepath.startswith(excel_folder) for excel_folder in excel_folders)
-        
-        # --- Exclusion check --- (skip for Excel folder files)
+        # --- Exclusion check ---
         excluded = False
-        if not in_excel_folder:
-            if gitignore_spec and gitignore_spec.match_file(relpath):
-                excluded = True
+        if gitignore_spec and gitignore_spec.match_file(relpath):
+            excluded = True
 
-            if not excluded and exclude_patterns:
-                for pattern in exclude_patterns:
-                    # Check if the pattern matches any part of the path
-                    if fnmatch.fnmatch(relpath, pattern) or any(fnmatch.fnmatch(part, pattern) for part in relpath.split(os.sep)):
-                        excluded = True
-                        break
+        if not excluded and exclude_patterns:
+            for pattern in exclude_patterns:
+                # Check if the pattern matches any part of the path
+                if fnmatch.fnmatch(relpath, pattern) or any(fnmatch.fnmatch(part, pattern) for part in relpath.split(os.sep)):
+                    excluded = True
+                    break
 
-        # --- Inclusion check --- (Excel folder files are always included)
-        included = in_excel_folder  # Automatically include Excel folder files
-        if not included and include_patterns:
+        # --- Inclusion check ---
+        included = False
+        if include_patterns:
             for pattern in include_patterns:
                 # Match by filename or full path
                 if fnmatch.fnmatch(relpath, pattern) or fnmatch.fnmatch(os.path.basename(relpath), pattern):
                     included = True
                     break
-        elif not included and not include_patterns:
-            included = True
+        else:
+            included = True  # Include all files if no include patterns specified
 
         processed_files += 1  # Increment processed count regardless of inclusion/exclusion
 
@@ -151,23 +130,9 @@ def crawl_local_files(
                 content = f.read()
             files_dict[relpath] = content
             included_files += 1
-            if in_excel_folder:
-                print(f"Including Excel folder file: {relpath}")
         except Exception as e:
             print(f"Warning: Could not read file {filepath}: {e}")
             status = "skipped (read error)"
-            
-            # Try reading as binary for Excel files
-            if in_excel_folder:
-                try:
-                    with open(filepath, "rb") as f:
-                        content = f.read().decode('utf-8', errors='replace')
-                    files_dict[relpath] = content
-                    included_files += 1
-                    status = "processed (binary)"
-                    print(f"Successfully read Excel folder file as binary: {relpath}")
-                except Exception as e2:
-                    print(f"Warning: Could not read Excel folder file even as binary {filepath}: {e2}")
 
         # --- Print progress for processed or error files ---
         if total_files > 0:
@@ -176,11 +141,6 @@ def crawl_local_files(
             print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
 
     print(f"Included {included_files} out of {total_files} files in the analysis")
-    print(f"Found {len(excel_folders)} Excel folders containing additional files")
-    
-    # Special check to confirm Excel folder files are included
-    excel_folder_files_count = sum(1 for path in files_dict.keys() if any(path.startswith(os.path.relpath(folder, directory)) for folder in excel_folders))
-    print(f"Included {excel_folder_files_count} files from Excel folders")
     
     return {"files": files_dict}
 

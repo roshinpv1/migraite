@@ -183,7 +183,11 @@ def _call_openai(prompt, timeout):
         signal.alarm(timeout)
         
         try:
-            client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            client_kwargs = {
+                "api_key": os.environ.get("OPENAI_API_KEY", "your-api-key"),
+                "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1")
+            }
+            client = OpenAI(**client_kwargs)
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
@@ -239,11 +243,16 @@ def _get_fallback_llm_response(prompt):
     vlogger.warning("Generating fallback LLM response due to provider failures")
     
     # Analyze the prompt to determine response type
-    if "dependency compatibility" in prompt.lower():
+    prompt_lower = prompt.lower()
+    if "dependency compatibility" in prompt_lower:
         return _get_fallback_dependency_response()
-    elif "spring migration" in prompt.lower():
-        return _get_fallback_migration_response()
-    elif "migration plan" in prompt.lower():
+    elif "spring migration" in prompt_lower or "migration change analysis" in prompt_lower:
+        # Check if this is individual file analysis or overall migration analysis
+        if "file to analyze" in prompt_lower or "file content:" in prompt_lower:
+            return _get_fallback_file_analysis_response()
+        else:
+            return _get_fallback_migration_response()
+    elif "migration plan" in prompt_lower:
         return _get_fallback_plan_response()
     else:
         return _get_fallback_generic_response()
@@ -252,7 +261,20 @@ def _get_fallback_llm_response(prompt):
 def _get_fallback_dependency_response():
     """Fallback response for dependency analysis."""
     return json.dumps({
-        "analysis_status": "fallback_analysis",
+        "analysis_status": "fallback_analysis_incomplete",
+        "maven_dependencies": [],
+        "gradle_dependencies": [],
+        "spring_dependencies": [],
+        "jakarta_dependencies": [],
+        "incompatible_dependencies": [],
+        "recommended_versions": {},
+        "migration_blockers": [
+            {
+                "blocker": "LLM analysis service unavailable",
+                "impact": "Critical",
+                "resolution": "Manual analysis required - cannot provide automated recommendations"
+            }
+        ],
         "dependencies": {
             "analyzed": 0,
             "compatible": [],
@@ -260,12 +282,14 @@ def _get_fallback_dependency_response():
             "incompatible": []
         },
         "recommendations": [
-            "Manual dependency review required due to LLM timeout",
-            "Check Spring Boot compatibility matrix",
-            "Review each dependency individually"
+            "LLM analysis service is unavailable",
+            "Manual dependency analysis required",
+            "Review actual project dependencies and Spring documentation",
+            "Cannot provide specific version recommendations without analysis"
         ],
-        "confidence": "low",
-        "manual_review_required": True
+        "confidence": "none",
+        "manual_review_required": True,
+        "fallback_reason": "LLM service unavailable - no automated analysis performed"
     }, indent=2)
 
 
@@ -273,56 +297,116 @@ def _get_fallback_migration_response():
     """Fallback response for Spring migration analysis."""
     return json.dumps({
         "executive_summary": {
-            "migration_impact": "Manual analysis required due to LLM service timeout",
-            "key_blockers": ["LLM service timeout", "Large codebase requires manual review"],
-            "recommended_approach": "Break down analysis into smaller chunks and perform manual review"
+            "migration_impact": "Unknown - automated analysis failed",
+            "key_blockers": ["LLM analysis service unavailable"],
+            "recommended_approach": "Manual code review and analysis required"
         },
         "detailed_analysis": {
-            "framework_audit": {"current_versions": {}, "deprecated_apis": [], "third_party_compatibility": []},
-            "jakarta_migration": {"javax_usages": [], "mapping_required": {}, "incompatible_libraries": []},
-            "configuration_analysis": {"java_config_issues": [], "xml_config_issues": [], "deprecated_patterns": []},
-            "security_migration": {"websecurity_adapter_usage": [], "auth_config_changes": [], "deprecated_security_features": []},
-            "data_layer": {"jpa_issues": [], "repository_issues": [], "hibernate_compatibility": []},
-            "web_layer": {"controller_issues": [], "servlet_issues": [], "deprecated_web_features": []},
-            "testing": {"test_framework_issues": [], "deprecated_test_patterns": []},
-            "build_tooling": {"build_file_issues": [], "plugin_compatibility": [], "cicd_considerations": []}
+            "framework_audit": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "jakarta_migration": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "configuration_analysis": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "security_migration": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "data_layer": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "web_layer": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "testing": {"analysis_status": "failed", "reason": "LLM service unavailable"},
+            "build_tooling": {"analysis_status": "failed", "reason": "LLM service unavailable"}
         },
         "effort_estimation": {
-            "total_effort": "Manual estimation required due to timeout",
+            "total_effort": "Cannot estimate - analysis not performed",
             "by_category": {},
-            "priority_levels": {"high": ["Manual code review required"], "medium": [], "low": []}
+            "priority_levels": {"high": [], "medium": [], "low": []}
         },
         "migration_roadmap": [
             {
                 "step": 1,
-                "title": "Manual Analysis",
-                "description": "Perform manual analysis due to LLM timeout",
-                "estimated_effort": "TBD"
+                "title": "Manual Analysis Required",
+                "description": "LLM analysis failed - manual code review needed to determine migration requirements",
+                "estimated_effort": "Unknown"
             }
-        ]
+        ],
+        "analysis_metadata": {
+            "status": "failed",
+            "reason": "LLM service unavailable",
+            "automated_analysis_performed": False,
+            "manual_review_required": True
+        }
     }, indent=2)
 
 
 def _get_fallback_plan_response():
     """Fallback response for migration plan generation."""
     return json.dumps({
-        "migration_plan": {
-            "total_effort": "Manual estimation required",
-            "team_size": "2-4 developers",
-            "timeline": "TBD",
-            "phases": [
-                {
-                    "phase": 1,
-                    "title": "Manual Assessment",
-                    "description": "Perform manual analysis due to LLM service issues"
-                }
-            ]
+        "migration_strategy": {
+            "approach": "Manual planning required",
+            "rationale": "LLM planning service unavailable - cannot generate automated migration plan",
+            "estimated_timeline": "Unknown - requires manual analysis",
+            "team_size_recommendation": "To be determined based on manual analysis"
         },
-        "recommendations": [
-            "Break down large codebase into smaller modules",
-            "Perform manual dependency analysis",
-            "Use incremental migration approach"
-        ]
+        "phase_breakdown": [
+            {
+                "phase": 1,
+                "name": "Manual Planning Phase",
+                "description": "LLM service unavailable - manual migration planning required",
+                "duration": "Unknown",
+                "deliverables": ["Manual migration assessment"],
+                "tasks": [
+                    {
+                        "task_id": "manual-analysis",
+                        "title": "Manual Code Analysis",
+                        "description": "Perform manual analysis since automated LLM analysis failed",
+                        "complexity": "Unknown",
+                        "estimated_hours": "To be determined",
+                        "dependencies": [],
+                        "automation_potential": "Unknown",
+                        "tools_required": ["Manual review"]
+                    }
+                ],
+                "risks": ["No automated analysis available"],
+                "success_criteria": ["Manual analysis completed"]
+            }
+        ],
+        "automation_recommendations": [],
+        "manual_changes": [
+            {
+                "category": "All Changes",
+                "changes": ["Manual analysis required - LLM service unavailable"],
+                "rationale": "Cannot provide automated recommendations without LLM analysis"
+            }
+        ],
+        "testing_strategy": {
+            "unit_tests": "Manual strategy required",
+            "integration_tests": "Manual strategy required",
+            "regression_testing": "Manual strategy required"
+        },
+        "rollback_plan": {
+            "triggers": ["Manual assessment required"],
+            "steps": ["Manual planning required"],
+            "data_considerations": "Manual assessment required"
+        },
+        "success_metrics": [
+            {
+                "metric": "Manual Analysis Completion",
+                "target": "TBD",
+                "measurement_method": "Manual review"
+            }
+        ],
+        "plan_metadata": {
+            "status": "failed",
+            "reason": "LLM service unavailable",
+            "automated_planning_performed": False,
+            "manual_planning_required": True
+        }
+    }, indent=2)
+
+
+def _get_fallback_file_analysis_response():
+    """Fallback response for individual file analysis."""
+    return json.dumps({
+        "javax_to_jakarta": [],
+        "spring_security_updates": [],
+        "dependency_updates": [],
+        "configuration_updates": [],
+        "other_changes": []
     }, indent=2)
 
 

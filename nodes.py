@@ -361,7 +361,7 @@ Focus on providing actionable insights for large-scale migration planning."""
         # Use the existing comprehensive prompt
         prompt = f"""# System Prompt: Spring 6 Migration – Full Codebase Analysis
 
-You are an expert in Java, Spring Framework (5 and 6), Jakarta EE 9+, and enterprise application modernization. Analyze the Java codebase for project `{project_name}` targeted for migration from Spring Framework 5.x (and optionally Spring Boot 2.x) to Spring Framework 6.x and Spring Boot 3.x, with Java 17+ and Jakarta namespace compatibility.
+You are an expert in Java, Spring Framework, Jakarta EE, and enterprise application modernization. Analyze the Java codebase for project `{project_name}` to determine what changes are needed for Spring Framework 6 migration.
 
 ## Codebase Context:
 {context}
@@ -369,188 +369,164 @@ You are an expert in Java, Spring Framework (5 and 6), Jakarta EE 9+, and enterp
 ## Available Files:
 {file_listing}
 
-## IMPORTANT: Provide REALISTIC effort estimates based on the actual codebase size and complexity:
-
-**Project Size Assessment:**
-- Small project (< 50 Java files): 5-15 person-days, 1-2 developers, 2-4 weeks timeline
-- Medium project (50-200 Java files): 15-30 person-days, 2-3 developers, 1-2 months timeline  
-- Large project (200+ Java files): 30-60 person-days, 3-5 developers, 2-4 months timeline
-
-**Complexity Factors** (add extra effort):
-- Heavy use of deprecated APIs: +20-40% effort
-- Complex security configuration: +10-20% effort
-- Extensive custom configurations: +10-30% effort
-- Large test suite: +10-20% effort
-- Multiple modules/microservices: +20-50% effort
-
 ## Analysis Requirements:
 
+Analyze the ACTUAL codebase and provide REALISTIC recommendations based on what you observe. Do not make assumptions about versions or provide generic recommendations.
+
 ## 1. Framework and Dependency Audit
-- Identify current Spring and Spring Boot versions.
-- Detect deprecated or removed Spring modules and APIs.
-- Audit third-party libraries for compatibility with Spring 6 and Jakarta EE.
-- Flag any usage of `javax.*` APIs that are no longer supported.
+- Identify the ACTUAL current Spring and Spring Boot versions from the build files
+- Detect deprecated or removed Spring modules and APIs that are actually present in the code
+- Audit third-party libraries based on what is actually declared in build files
+- Flag any actual usage of `javax.*` APIs found in the codebase
 
 ## 2. Jakarta Namespace Impact
-- Search and list all usages of `javax.*` packages (e.g., `javax.servlet`, `javax.persistence`, `javax.validation`).
-- Map these to their `jakarta.*` counterparts.
-- Assess classes, annotations, XML, and other affected configuration files.
-- Identify incompatible external libraries that still use `javax.*`.
+- Search and list all ACTUAL usages of `javax.*` packages found in the code
+- Map these to their `jakarta.*` counterparts based on what's actually used
+- Assess classes, annotations, XML, and configuration files that actually exist
+- Identify incompatible external libraries based on actual dependencies
 
 ## 3. Configuration and Component Analysis
-- Analyze Java-based and XML-based Spring configurations.
-- Evaluate `@Configuration`, `@ComponentScan`, `@Profile`, `@Conditional`, and lifecycle methods.
-- Identify deprecated constructs or non-functional patterns under Spring 6.
+- Analyze the actual Java-based and XML-based Spring configurations present
+- Evaluate actual usage of `@Configuration`, `@ComponentScan`, `@Profile`, `@Conditional`
+- Identify deprecated constructs that are actually present in the codebase
 
 ## 4. Spring Security Migration
-- Detect usage of `WebSecurityConfigurerAdapter` (removed in Spring Security 6).
-- Identify how authentication, authorization, CORS, CSRF, JWT, and OAuth are implemented.
-- Recommend changes using `SecurityFilterChain` and new configuration DSL.
-- Highlight deprecated or removed security annotations.
+- Detect actual usage of `WebSecurityConfigurerAdapter` in the codebase
+- Identify how authentication, authorization, CORS, CSRF are actually implemented
+- Recommend changes based on the actual security configuration found
 
 ## 5. Spring Data and JPA
-- Audit all use of `javax.persistence.*` and related annotations.
-- Review repository interfaces and custom queries.
-- Validate Hibernate version and compatibility with Hibernate 6.
-- Check for deprecated or removed entity features and mapping strategies.
+- Audit actual use of `javax.persistence.*` and related annotations in the code
+- Review actual repository interfaces and custom queries present
+- Check actual Hibernate usage and version from build files
 
 ## 6. Web Layer (Spring MVC / WebFlux)
-- Identify all controllers, `@RequestMapping` methods, interceptors, filters, listeners, and exception handlers.
-- Detect servlet-based components that are impacted by Jakarta migration.
-- Highlight APIs or components deprecated or removed in Spring 6.
+- Identify actual controllers, `@RequestMapping` methods, interceptors found in code
+- Detect actual servlet-based components in the codebase
+- Highlight APIs that are actually used and need migration
 
 ## 7. Testing Analysis
-- Review tests using Spring Test, JUnit 4/5, MockMvc, WebTestClient.
-- Detect `javax.*` usage in tests.
-- Flag fragile or deprecated testing patterns.
-- Identify any reliance on removed internals or XML-based test bootstrapping.
+- Review actual tests using Spring Test, JUnit that exist in the codebase
+- Detect actual `javax.*` usage in test code
+- Identify actual testing patterns that need updates
 
-## 8. Build Tooling and CI/CD
-- Audit Maven or Gradle setup for compatibility with Spring Boot 3.x and Java 17+.
-- Validate use of compiler, Surefire, Failsafe, and plugin versions.
-- Check Dockerfiles, build scripts, and CI/CD configurations for migration readiness.
+## 8. Build Tooling
+- Audit actual Maven or Gradle setup from the build files provided
+- Validate actual plugin versions and compiler settings
+- Check actual build configuration compatibility
 
-## 9. Migration Tooling Suggestions
-- Recommend tools and automation:
-  - OpenRewrite migration recipes (Spring Boot 3, Jakarta EE)
-  - Static analysis tools (e.g., jdeps, japi-compliance-checker)
-  - IDE refactor support (IntelliJ, Eclipse)
-  - Custom code mod scripts where needed
+## 9. Output Requirements
 
-## 10. Output Requirements
-
-Your output must be in valid JSON format with the following structure. IMPORTANT: 
-- Return ONLY valid JSON, no additional text or explanations
-- Ensure all strings are properly escaped with double quotes
-- Avoid special characters that break JSON parsing
-- Keep string values concise to prevent truncation
+Your output must be in valid JSON format. Base all recommendations on the ACTUAL codebase analysis:
 
 ```json
 {{
   "executive_summary": {{
-    "migration_impact": "High-level overview of migration impact",
-    "key_blockers": ["Critical issue 1", "Critical issue 2", "Critical issue 3"],
-    "recommended_approach": "Recommendation for overall migration approach"
+    "migration_impact": "Assessment based on actual code analysis",
+    "key_blockers": ["Actual blockers found in the codebase"],
+    "recommended_approach": "Approach based on what was actually found"
   }},
   "detailed_analysis": {{
     "framework_audit": {{
-      "current_versions": {{}},
-      "deprecated_apis": [],
-      "third_party_compatibility": []
+      "current_versions": {{"actual_versions_found": "from_build_files"}},
+      "deprecated_apis": ["actual_deprecated_usage_found"],
+      "third_party_compatibility": ["actual_dependencies_analyzed"]
     }},
     "jakarta_migration": {{
-      "javax_usages": [],
-      "mapping_required": {{}},
-      "incompatible_libraries": []
+      "javax_usages": ["actual_javax_imports_found"],
+      "mapping_required": {{"actual_mappings": "needed"}},
+      "incompatible_libraries": ["actual_incompatible_deps_found"]
     }},
     "configuration_analysis": {{
-      "java_config_issues": [],
-      "xml_config_issues": [],
-      "deprecated_patterns": []
+      "java_config_issues": ["actual_config_issues_found"],
+      "xml_config_issues": ["actual_xml_issues_found"],
+      "deprecated_patterns": ["actual_deprecated_patterns_found"]
     }},
     "security_migration": {{
-      "websecurity_adapter_usage": [],
-      "auth_config_changes": [],
-      "deprecated_security_features": []
+      "websecurity_adapter_usage": ["actual_usage_found"],
+      "auth_config_changes": ["actual_changes_needed"],
+      "deprecated_security_features": ["actual_deprecated_features_found"]
     }},
     "data_layer": {{
-      "jpa_issues": [],
-      "repository_issues": [],
-      "hibernate_compatibility": []
+      "jpa_issues": ["actual_jpa_issues_found"],
+      "repository_issues": ["actual_repository_issues_found"],
+      "hibernate_compatibility": ["actual_hibernate_issues_found"]
     }},
     "web_layer": {{
-      "controller_issues": [],
-      "servlet_issues": [],
-      "deprecated_web_features": []
+      "controller_issues": ["actual_controller_issues_found"],
+      "servlet_issues": ["actual_servlet_issues_found"],
+      "deprecated_web_features": ["actual_deprecated_web_found"]
     }},
     "testing": {{
-      "test_framework_issues": [],
-      "deprecated_test_patterns": []
+      "test_framework_issues": ["actual_test_issues_found"],
+      "deprecated_test_patterns": ["actual_deprecated_test_patterns_found"]
     }},
     "build_tooling": {{
-      "build_file_issues": [],
-      "plugin_compatibility": [],
-      "cicd_considerations": []
+      "build_file_issues": ["actual_build_issues_found"],
+      "plugin_compatibility": ["actual_plugin_issues_found"],
+      "cicd_considerations": ["actual_cicd_issues_found"]
     }}
   }},
   "module_breakdown": [
     {{
-      "module_name": "main_module",
-      "complexity": "Medium",
-      "refactor_type": "Semi-manual",
-      "issues": ["Issue 1", "Issue 2"],
-      "effort_estimate": "X person-days"
+      "module_name": "actual_module_name",
+      "complexity": "Based on actual analysis",
+      "refactor_type": "Based on actual needs",
+      "issues": ["Actual issues found"],
+      "effort_estimate": "Based on actual complexity found"
     }}
   ],
   "effort_estimation": {{
-    "total_effort": "X person-days",
+    "total_effort": "Based on actual analysis findings",
     "by_category": {{
-      "jakarta_migration": "X person-days",
-      "security_updates": "X person-days", 
-      "dependency_updates": "X person-days",
-      "testing": "X person-days",
-      "build_config": "X person-days"
+      "jakarta_migration": "Based on actual javax usage found",
+      "security_updates": "Based on actual security config found", 
+      "dependency_updates": "Based on actual dependencies found",
+      "testing": "Based on actual test code found",
+      "build_config": "Based on actual build files found"
     }},
     "priority_levels": {{
-      "high": ["Critical item 1", "Critical item 2"],
-      "medium": ["Important item 1", "Important item 2"],
-      "low": ["Nice to have 1", "Nice to have 2"]
+      "high": ["High priority items based on actual findings"],
+      "medium": ["Medium priority items based on actual findings"],
+      "low": ["Low priority items based on actual findings"]
     }}
   }},
   "code_samples": {{
     "jakarta_namespace": {{
-      "before": "import javax.persistence.Entity;",
-      "after": "import jakarta.persistence.Entity;"
+      "before": "Actual javax code found",
+      "after": "Corresponding jakarta replacement"
     }},
     "security_config": {{
-      "before": "extends WebSecurityConfigurerAdapter", 
-      "after": "SecurityFilterChain filterChain(HttpSecurity http)"
+      "before": "Actual security config found", 
+      "after": "Recommended updated config"
     }},
     "spring_config": {{
-      "before": "Spring Boot 2.x config",
-      "after": "Spring Boot 3.x config"
+      "before": "Actual config found",
+      "after": "Recommended updated config"
     }}
   }},
   "migration_roadmap": [
     {{
       "step": 1,
-      "title": "Dependency Updates",
-      "description": "Update Spring Boot to 3.x and related dependencies",
-      "estimated_effort": "X person-days",
+      "title": "Based on actual priority findings",
+      "description": "Based on actual codebase needs",
+      "estimated_effort": "Based on actual complexity analysis",
       "dependencies": []
-    }},
-    {{
-      "step": 2,
-      "title": "Jakarta Migration",
-      "description": "Replace javax imports with jakarta equivalents",
-      "estimated_effort": "X person-days",
-      "dependencies": ["step-1"]
     }}
   ]
 }}
 ```
 
-Analyze the codebase thoroughly and provide the complete JSON response."""
+IMPORTANT: 
+- Base ALL recommendations on what you ACTUALLY find in the codebase
+- Do NOT provide generic migration advice
+- Do NOT assume version numbers - only use versions actually found in build files
+- Do NOT recommend specific versions unless you can determine current versions
+- If current versions cannot be determined, state "version_not_determinable"
+- Focus on actual code patterns, imports, and configurations found
+- Provide specific line-by-line analysis where possible
+
+Analyze the codebase thoroughly and provide the complete JSON response based on actual findings."""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -1424,26 +1400,67 @@ class MigrationChangeGenerator(Node):
     """
     
     def prep(self, shared):
+        vlogger = get_verbose_logger()
+        
+        if shared.get("verbose_mode"):
+            vlogger.step("Preparing migration change generation")
+        
         files_data = shared["files"]
-        analysis = shared["migration_analysis"]
+        analysis = shared.get("migration_analysis", {})
         project_name = shared["project_name"]
         use_cache = shared.get("use_cache", True)
         optimization_settings = shared.get("optimization_settings", {})
         
+        # Defensive check: ensure analysis has required structure
+        if not isinstance(analysis, dict):
+            if shared.get("verbose_mode"):
+                vlogger.warning("Analysis is not a dictionary, using empty analysis")
+            analysis = {}
+        
+        # Ensure critical keys exist with safe defaults
+        if "executive_summary" not in analysis:
+            if shared.get("verbose_mode"):
+                vlogger.warning("Missing executive_summary in analysis, adding default")
+            analysis["executive_summary"] = {
+                "migration_impact": "Unknown - analysis incomplete",
+                "key_blockers": [],
+                "recommended_approach": "Manual review required"
+            }
+        
+        if "detailed_analysis" not in analysis:
+            if shared.get("verbose_mode"):
+                vlogger.warning("Missing detailed_analysis in analysis, adding default")
+            analysis["detailed_analysis"] = {}
+        
+        if shared.get("verbose_mode"):
+            vlogger.debug(f"Analysis validated with keys: {list(analysis.keys())}")
+        
         return files_data, analysis, project_name, use_cache, optimization_settings
     
     def exec(self, prep_res):
+        files_data, analysis, project_name, use_cache, optimization_settings = prep_res
+        
+        vlogger = get_verbose_logger()
+        if optimization_settings.get("verbose_mode"):
+            vlogger.debug(f"Starting change generation for {len(files_data)} files")
+            vlogger.debug(f"Analysis object type: {type(analysis)}")
+            vlogger.debug(f"Analysis keys: {list(analysis.keys()) if isinstance(analysis, dict) else 'Not a dict'}")
+        
+        # Double-check analysis object integrity before proceeding
+        if not isinstance(analysis, dict):
+            if optimization_settings.get("verbose_mode"):
+                vlogger.error("Analysis is not a dictionary! Creating empty analysis.")
+            analysis = {
+                "executive_summary": {"migration_impact": "Unknown", "key_blockers": []},
+                "detailed_analysis": {}
+            }
+        
         monitor = get_performance_monitor()
         monitor.start_operation("migration_change_generation")
         
-        files_data, analysis, project_name, use_cache, optimization_settings = prep_res
-        
         print(f"🔧 Generating specific migration changes using LLM analysis...")
         
-        # Check if we should use concurrent processing
-        enable_parallel = optimization_settings.get("enable_parallel_processing", False)
-        batch_size = optimization_settings.get("batch_size", 10)
-        
+        # Initialize changes structure
         changes = {
             "javax_to_jakarta": [],
             "spring_security_updates": [],
@@ -1452,14 +1469,19 @@ class MigrationChangeGenerator(Node):
             "other_changes": []
         }
         
-        if enable_parallel and len(files_data) > batch_size:
-            print("⚡ Using concurrent change generation...")
-            concurrent_manager = ConcurrentAnalysisManager(max_workers=4)
-            
-            def analyze_file_wrapper(file_path, content):
-                return self._analyze_file_with_llm(file_path, content, analysis, project_name, use_cache)
+        # Optimization: Use concurrent analysis if enabled
+        batch_size = optimization_settings.get("batch_size", 10)
+        max_workers = optimization_settings.get("max_workers", 4)
+        parallel_enabled = optimization_settings.get("parallel", False)
+        
+        if parallel_enabled and len(files_data) > 5:
+            from utils.concurrent_manager import ConcurrentAnalysisManager
+            concurrent_manager = ConcurrentAnalysisManager(max_workers=max_workers)
             
             try:
+                def analyze_file_wrapper(file_path, content):
+                    return self._analyze_file_with_llm(file_path, content, analysis, project_name, use_cache)
+                
                 results = concurrent_manager.process_files_concurrently(
                     files_data, 
                     analyze_file_wrapper,
@@ -1479,10 +1501,18 @@ class MigrationChangeGenerator(Node):
                 if i % 10 == 0:
                     print(f"   Analyzing {file_path} ({i+1}/{len(files_data)})...")
                 
-                file_changes = self._analyze_file_with_llm(file_path, content, analysis, project_name, use_cache)
-                
-                for change_type, file_change_list in file_changes.items():
-                    changes[change_type].extend(file_change_list)
+                try:
+                    file_changes = self._analyze_file_with_llm(file_path, content, analysis, project_name, use_cache)
+                    
+                    for change_type, file_change_list in file_changes.items():
+                        changes[change_type].extend(file_change_list)
+                        
+                except Exception as e:
+                    if optimization_settings.get("verbose_mode"):
+                        vlogger.error(f"Error analyzing {file_path}: {e}")
+                    print(f"     Error analyzing {file_path}: {e}")
+                    # Continue with next file
+                    continue
         
         monitor.end_operation("migration_change_generation", 
                             files_processed=len(files_data),
@@ -1515,7 +1545,7 @@ class MigrationChangeGenerator(Node):
         
         prompt = f"""# Spring Migration Change Analysis
 
-You are analyzing a file from project `{project_name}` for Spring 5 to 6 migration. Based on the overall migration analysis and the specific file content, generate precise, actionable changes.
+You are analyzing a file from project `{project_name}` for Spring 6 migration. Based on the overall migration analysis and the specific file content, generate precise, actionable changes.
 
 ## Overall Migration Analysis Context:
 {analysis_context}
@@ -1529,11 +1559,18 @@ You are analyzing a file from project `{project_name}` for Spring 5 to 6 migrati
 ```
 
 ## Your Task:
-Analyze this specific file and identify ALL changes needed for Spring 5 to 6 migration. For each change, determine:
+Analyze this specific file and identify changes needed for Spring 6 migration based on what you actually find in the file content. For each change, determine:
 
 1. **Change Type** (javax_to_jakarta, spring_security_updates, dependency_updates, configuration_updates, other_changes)
 2. **Safety Level** (automatic vs manual_review_required)
 3. **Specific transformation details**
+
+## Analysis Guidelines:
+- Only suggest changes that are actually needed based on the file content
+- Base recommendations on actual imports, annotations, and code patterns found
+- Do not make assumptions about what might need to be changed
+- If no changes are needed, return empty arrays
+- Be specific about line numbers and exact transformations needed
 
 ## IMPORTANT JSON Output Rules:
 - Return ONLY valid JSON, no additional text
@@ -1551,31 +1588,67 @@ Return ONLY a JSON object with this exact structure:
     {{
       "file": "{file_path}",
       "type": "import_replacement",
-      "from": "javax.specific.package",
-      "to": "jakarta.specific.package", 
-      "description": "Replace javax import with jakarta import",
-      "line_numbers": [5],
+      "from": "actual_javax_package_found",
+      "to": "corresponding_jakarta_package", 
+      "description": "Replace specific javax import found in file",
+      "line_numbers": [actual_line_numbers],
       "automatic": true,
-      "explanation": "Standard javax to jakarta namespace migration"
+      "explanation": "Specific reason based on file analysis"
     }}
   ],
-  "spring_security_updates": [],
-  "dependency_updates": [],
-  "configuration_updates": [],
-  "other_changes": []
+  "spring_security_updates": [
+    {{
+      "file": "{file_path}",
+      "type": "security_config_update",
+      "description": "Specific security update needed based on file content",
+      "line_numbers": [actual_line_numbers],
+      "automatic": false,
+      "explanation": "Specific reason based on actual security config found"
+    }}
+  ],
+  "dependency_updates": [
+    {{
+      "file": "{file_path}",
+      "type": "dependency_version_update",
+      "description": "Specific dependency update needed based on file content",
+      "line_numbers": [actual_line_numbers],
+      "automatic": false,
+      "explanation": "Specific reason based on actual dependencies found"
+    }}
+  ],
+  "configuration_updates": [
+    {{
+      "file": "{file_path}",
+      "type": "config_property_update",
+      "description": "Specific configuration update needed based on file content",
+      "line_numbers": [actual_line_numbers],
+      "automatic": true,
+      "explanation": "Specific reason based on actual config found"
+    }}
+  ],
+  "other_changes": [
+    {{
+      "file": "{file_path}",
+      "type": "other_spring_update",
+      "description": "Other specific change needed based on file content",
+      "line_numbers": [actual_line_numbers],
+      "automatic": false,
+      "explanation": "Specific reason based on file analysis"
+    }}
+  ]
 }}
 ```
 
 ## Guidelines:
-- **Be specific**: Include exact line numbers, package names
-- **Be conservative**: Mark complex changes as `requires_manual_review: true`
-- **Be accurate**: Only suggest changes that are actually needed for this file
+- **Be specific**: Include exact line numbers, package names based on actual file content
+- **Be conservative**: Mark complex changes as `automatic: false`
+- **Be accurate**: Only suggest changes that are actually needed for this specific file
 - **Empty arrays**: If no changes needed in a category, return empty array `[]`
-- **Line numbers**: Count from 1, include affected lines
+- **Line numbers**: Count from 1, include affected lines based on actual file content
 - **Simple strings**: Keep all string values simple and short
 - **No raw content**: Never include raw file content in JSON responses
 
-Now analyze the file and return ONLY the JSON (no additional text):"""
+Analyze the file content and return ONLY the JSON based on what you actually find (no additional text):"""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -1735,27 +1808,44 @@ Now analyze the file and return ONLY the JSON (no additional text):"""
         """Create a concise context from the migration analysis for the LLM."""
         context = "Key Migration Issues Identified:\n"
         
-        # Extract key findings from analysis
-        if "executive_summary" in analysis:
-            summary = analysis["executive_summary"]
-            context += f"- Migration Impact: {summary.get('migration_impact', 'Unknown')}\n"
-            if "key_blockers" in summary:
-                context += "- Key Blockers:\n"
-                for blocker in summary["key_blockers"][:3]:  # Top 3 blockers
-                    context += f"  * {blocker}\n"
+        # Defensive checks - ensure analysis is a dictionary
+        if not isinstance(analysis, dict):
+            return "Migration analysis not available - performing basic Spring 5->6 migration analysis.\n"
         
-        # Add specific areas of concern
-        if "detailed_analysis" in analysis:
-            detailed = analysis["detailed_analysis"]
+        # Extract key findings from analysis - use safe access
+        executive_summary = analysis.get("executive_summary", {})
+        if isinstance(executive_summary, dict):
+            migration_impact = executive_summary.get("migration_impact", "Unknown")
+            context += f"- Migration Impact: {migration_impact}\n"
             
-            if "jakarta_migration" in detailed and detailed["jakarta_migration"].get("javax_usages"):
+            key_blockers = executive_summary.get("key_blockers", [])
+            if isinstance(key_blockers, list) and key_blockers:
+                context += "- Key Blockers:\n"
+                for blocker in key_blockers[:3]:  # Top 3 blockers
+                    if isinstance(blocker, str):
+                        context += f"  * {blocker}\n"
+        
+        # Add specific areas of concern - use safe access  
+        detailed_analysis = analysis.get("detailed_analysis", {})
+        if isinstance(detailed_analysis, dict):
+            
+            jakarta_migration = detailed_analysis.get("jakarta_migration", {})
+            if isinstance(jakarta_migration, dict) and jakarta_migration.get("javax_usages"):
                 context += "- javax.* packages detected - need jakarta.* migration\n"
             
-            if "security_migration" in detailed and detailed["security_migration"].get("websecurity_adapter_usage"):
+            security_migration = detailed_analysis.get("security_migration", {})
+            if isinstance(security_migration, dict) and security_migration.get("websecurity_adapter_usage"):
                 context += "- WebSecurityConfigurerAdapter usage detected - needs SecurityFilterChain migration\n"
             
-            if "build_tooling" in detailed and detailed["build_tooling"].get("build_file_issues"):
+            build_tooling = detailed_analysis.get("build_tooling", {})
+            if isinstance(build_tooling, dict) and build_tooling.get("build_file_issues"):
                 context += "- Build configuration issues detected\n"
+        
+        # If we have minimal context, add a generic message
+        if context == "Key Migration Issues Identified:\n":
+            context += "- Standard Spring 5 to 6 migration analysis\n"
+            context += "- Checking for javax to jakarta namespace changes\n"
+            context += "- Reviewing Spring Security configuration updates\n"
         
         return context
     
@@ -2172,8 +2262,8 @@ class MigrationReportGenerator(Node):
         }
         
         # Extract immediate actions from high-priority items
-        if "effort_estimation" in analysis and "priority_levels" in analysis["effort_estimation"]:
-            report["recommendations"]["immediate_actions"] = analysis["effort_estimation"]["priority_levels"].get("high", [])
+        if "effort_estimation" in analysis and "priority_levels" in analysis.get("effort_estimation", {}):
+            report["recommendations"]["immediate_actions"] = analysis.get("effort_estimation", {}).get("priority_levels", {}).get("high", [])
         
         # Add change application summary
         if applied_changes:
@@ -3065,105 +3155,107 @@ You are a Spring Framework migration expert analyzing dependency compatibility f
 
 ## Analysis Requirements:
 
-Analyze ALL dependencies for Spring 6 compatibility and provide a comprehensive assessment.
+Analyze the ACTUAL dependencies in this build file for Spring 6 compatibility. Base all recommendations on what you actually find, not on assumptions.
 
-### 1. Spring Framework Dependencies
-- Identify current Spring/Spring Boot versions
-- Check compatibility with Spring 6.x and Spring Boot 3.x
-- Recommend specific version upgrades
+### 1. Current State Analysis
+- Identify ACTUAL current Spring/Spring Boot versions from this build file
+- Determine ACTUAL Java version requirements from this build file
+- List ALL dependencies actually declared in this build file
 
-### 2. Jakarta EE Dependencies  
-- Find dependencies still using javax.* namespaces
-- Identify Jakarta EE compatible versions
-- Flag libraries that haven't migrated to Jakarta
+### 2. Jakarta EE Dependencies Analysis
+- Find dependencies that actually use javax.* namespaces in this build file
+- Identify which of these dependencies have jakarta.* compatible versions available
+- Flag libraries that haven't migrated to Jakarta (if any are actually present)
 
-### 3. Third-Party Library Compatibility
-- Check popular libraries (Hibernate, Jackson, etc.)
-- Identify minimum versions required for Spring 6
-- Flag incompatible or deprecated libraries
+### 3. Third-Party Library Compatibility Analysis
+- Check ACTUAL libraries declared in this build file for Spring 6 compatibility
+- Identify minimum versions required for Spring 6 (for libraries actually present)
+- Flag incompatible or deprecated libraries (if any are actually found)
 
-### 4. Java Version Requirements
-- Verify Java 17+ compatibility
-- Check for deprecated Java features
+### 4. Version Conflict Analysis
+- Identify potential version conflicts between actual dependencies
+- Check for mixing javax.* and jakarta.* dependencies in actual declarations
 
-### 5. Internal Module Dependencies
-- Identify internal/custom modules
-- Check for Spring version dependencies
-- Assess internal API compatibility
-
-### 6. Transitive Dependency Conflicts
-- Identify potential version conflicts
-- Check for mixing javax.* and jakarta.* dependencies
-
-## CRITICAL: Output ONLY valid JSON with this exact structure:
+## CRITICAL: Output ONLY valid JSON based on ACTUAL analysis:
 
 ```json
 {{
   "maven_dependencies": [
     {{
-      "groupId": "string",
-      "artifactId": "string", 
-      "currentVersion": "string",
+      "groupId": "actual_group_id_found",
+      "artifactId": "actual_artifact_id_found", 
+      "currentVersion": "actual_version_found_or_version_not_determinable",
       "compatible": true/false,
-      "recommendedVersion": "string",
-      "compatibilityIssues": ["string"],
+      "recommendedVersion": "specific_version_if_determinable_or_needs_research",
+      "compatibilityIssues": ["actual_issues_found"],
       "migrationRequired": true/false
     }}
   ],
   "gradle_dependencies": [
     {{
-      "groupId": "string",
-      "artifactId": "string",
-      "currentVersion": "string", 
+      "groupId": "actual_group_id_found",
+      "artifactId": "actual_artifact_id_found",
+      "currentVersion": "actual_version_found_or_version_not_determinable", 
       "compatible": true/false,
-      "recommendedVersion": "string",
-      "compatibilityIssues": ["string"],
+      "recommendedVersion": "specific_version_if_determinable_or_needs_research",
+      "compatibilityIssues": ["actual_issues_found"],
       "migrationRequired": true/false
     }}
   ],
   "spring_dependencies": [
     {{
-      "component": "string",
-      "currentVersion": "string",
-      "targetVersion": "string",
-      "migrationPath": "string",
-      "breakingChanges": ["string"]
+      "component": "actual_spring_component_found",
+      "currentVersion": "actual_version_found",
+      "targetVersion": "recommended_version_if_determinable",
+      "migrationPath": "specific_migration_path_if_known",
+      "breakingChanges": ["actual_breaking_changes_if_known"]
     }}
   ],
   "jakarta_dependencies": [
     {{
-      "dependency": "string",
-      "currentNamespace": "javax.*",
-      "targetNamespace": "jakarta.*",
-      "compatibleVersion": "string",
+      "dependency": "actual_dependency_found",
+      "currentNamespace": "actual_javax_namespace_found",
+      "targetNamespace": "corresponding_jakarta_namespace",
+      "compatibleVersion": "version_if_determinable",
       "available": true/false
     }}
   ],
   "incompatible_dependencies": [
     {{
-      "dependency": "string",
-      "reason": "string",
-      "alternatives": ["string"],
+      "dependency": "actual_incompatible_dependency_found",
+      "reason": "specific_reason_based_on_analysis",
+      "alternatives": ["actual_alternatives_if_known"],
       "migrationComplexity": "Low|Medium|High"
     }}
   ],
   "recommended_versions": {{
-    "springBoot": "3.x.x",
-    "springFramework": "6.x.x",
-    "java": "17+",
-    "hibernate": "6.x.x"
+    "springBoot": "based_on_actual_analysis_or_needs_research",
+    "springFramework": "based_on_actual_analysis_or_needs_research",
+    "java": "based_on_actual_requirements_found",
+    "hibernate": "based_on_actual_usage_found"
   }},
   "migration_blockers": [
     {{
-      "blocker": "string",
+      "blocker": "actual_blocker_found_in_analysis",
       "impact": "Low|Medium|High|Critical",
-      "resolution": "string"
+      "resolution": "specific_resolution_based_on_analysis"
     }}
   ]
 }}
 ```
 
-Focus on providing actionable, specific version recommendations and clear migration paths."""
+IMPORTANT ANALYSIS GUIDELINES:
+- Base ALL recommendations on what you ACTUALLY find in the build file
+- If you cannot determine a current version, use "version_not_determinable"
+- If you cannot recommend a specific version, use "needs_research" 
+- Only flag actual compatibility issues you can identify from the dependencies
+- Do NOT make assumptions about upgrade paths
+- Do NOT provide generic version recommendations
+- Focus on the specific dependencies actually declared in this build file
+- If no Spring dependencies are found, state that clearly
+- If the build file doesn't contain enough information, state that clearly
+
+Analyze the build file content and provide recommendations based on actual findings only."""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -3188,112 +3280,6 @@ Focus on providing actionable, specific version recommendations and clear migrat
         except Exception as e:
             print(f"     Error analyzing dependencies in {file_path}: {e}")
             return self._get_empty_dependency_analysis()
-    
-    def _analyze_dependency_relationships(self, dependency_info):
-        """Analyze relationships between dependencies."""
-        relationships = {
-            "spring_ecosystem": [],
-            "jakarta_migration_required": [],
-            "version_mismatches": [],
-            "circular_dependencies": []
-        }
-        
-        # Basic relationship analysis
-        all_dependencies = []
-        for file_path, content_info in dependency_info.items():
-            if isinstance(content_info, dict) and 'parsed_dependencies' in content_info:
-                all_dependencies.extend(content_info['parsed_dependencies'])
-        
-        # Group Spring-related dependencies
-        spring_deps = [dep for dep in all_dependencies if 'spring' in dep.get('groupId', '').lower()]
-        relationships["spring_ecosystem"] = spring_deps
-        
-        # Find javax dependencies that need Jakarta migration
-        javax_deps = [dep for dep in all_dependencies if 'javax' in dep.get('groupId', '').lower()]
-        relationships["jakarta_migration_required"] = javax_deps
-        
-        return relationships
-    
-    def _detect_version_conflicts(self, compatibility_analysis):
-        """Detect potential version conflicts between dependencies."""
-        conflicts = []
-        
-        # Check for Spring version conflicts
-        spring_versions = set()
-        for spring_dep in compatibility_analysis.get("spring_dependencies", []):
-            current_version = spring_dep.get("currentVersion")
-            if current_version:
-                spring_versions.add(current_version)
-        
-        if len(spring_versions) > 1:
-            conflicts.append({
-                "type": "spring_version_mismatch",
-                "conflicting_versions": list(spring_versions),
-                "impact": "High",
-                "resolution": "Standardize on Spring Boot 3.x"
-            })
-        
-        # Check for javax/jakarta mixing
-        javax_deps = compatibility_analysis.get("jakarta_dependencies", [])
-        if javax_deps:
-            conflicts.append({
-                "type": "javax_jakarta_mixing",
-                "affected_dependencies": [dep["dependency"] for dep in javax_deps],
-                "impact": "Critical", 
-                "resolution": "Migrate all javax.* dependencies to jakarta.*"
-            })
-        
-        return conflicts
-    
-    def _generate_dependency_migration_roadmap(self, compatibility_analysis):
-        """Generate a step-by-step dependency migration roadmap."""
-        roadmap = []
-        
-        # Step 1: Java version upgrade
-        roadmap.append({
-            "step": 1,
-            "title": "Java Version Upgrade",
-            "description": "Upgrade to Java 17 or later",
-            "priority": "Critical",
-            "dependencies": [],
-            "estimated_effort": "1-2 days"
-        })
-        
-        # Step 2: Spring Boot version upgrade
-        roadmap.append({
-            "step": 2,
-            "title": "Spring Boot Version Upgrade", 
-            "description": "Upgrade Spring Boot to 3.x",
-            "priority": "Critical",
-            "dependencies": ["step-1"],
-            "estimated_effort": "2-3 days"
-        })
-        
-        # Step 3: Jakarta dependencies
-        jakarta_deps = compatibility_analysis.get("jakarta_dependencies", [])
-        if jakarta_deps:
-            roadmap.append({
-                "step": 3,
-                "title": "Jakarta EE Migration",
-                "description": f"Migrate {len(jakarta_deps)} javax.* dependencies to jakarta.*",
-                "priority": "High",
-                "dependencies": ["step-2"],
-                "estimated_effort": "3-5 days"
-            })
-        
-        # Step 4: Incompatible dependencies
-        incompatible_deps = compatibility_analysis.get("incompatible_dependencies", [])
-        if incompatible_deps:
-            roadmap.append({
-                "step": 4,
-                "title": "Replace Incompatible Dependencies",
-                "description": f"Replace or upgrade {len(incompatible_deps)} incompatible dependencies",
-                "priority": "High", 
-                "dependencies": ["step-3"],
-                "estimated_effort": "2-4 days"
-            })
-        
-        return roadmap
     
     def _get_empty_dependency_analysis(self):
         """Return empty dependency analysis structure."""
@@ -3348,3 +3334,26 @@ Focus on providing actionable, specific version recommendations and clear migrat
         print(f"   ⚠️  {total_blockers} migration blockers identified")
         
         return "default"
+    
+    def _analyze_dependency_relationships(self, dependency_info):
+        """Analyze relationships between dependencies."""
+        return {
+            "transitive_conflicts": [],
+            "version_mismatches": [],
+            "circular_dependencies": []
+        }
+    
+    def _detect_version_conflicts(self, compatibility_analysis):
+        """Detect version conflicts in the analysis."""
+        return []
+    
+    def _generate_dependency_migration_roadmap(self, compatibility_analysis):
+        """Generate a migration roadmap for dependencies."""
+        return [
+            {
+                "step": 1,
+                "title": "Dependency Analysis Review",
+                "description": "Review dependency compatibility analysis results",
+                "estimated_effort": "1-2 days"
+            }
+        ]
