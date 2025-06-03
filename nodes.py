@@ -2517,3 +2517,90 @@ Analyze the file and return ONLY the JSON object:"""
             
         except Exception:
             return False  # Assume binary if we can't analyze it
+    
+    def _create_analysis_context(self, analysis):
+        """Create a concise analysis context for file-level LLM analysis."""
+        try:
+            if not isinstance(analysis, dict):
+                return "Analysis data unavailable - using file-level analysis only"
+            
+            # Extract key findings from the overall analysis
+            context_parts = []
+            
+            # Executive summary
+            executive_summary = analysis.get("executive_summary", {})
+            if executive_summary:
+                context_parts.append(f"Migration Impact: {executive_summary.get('migration_impact', 'Unknown')}")
+                key_blockers = executive_summary.get('key_blockers', [])
+                if key_blockers:
+                    context_parts.append(f"Key Issues: {', '.join(key_blockers[:3])}")
+            
+            # Jakarta migration findings
+            detailed_analysis = analysis.get("detailed_analysis", {})
+            jakarta_migration = detailed_analysis.get("jakarta_migration", {})
+            if jakarta_migration:
+                javax_usages = jakarta_migration.get('javax_usages', [])
+                if javax_usages:
+                    context_parts.append(f"javax imports found: {len(javax_usages)} occurrences")
+            
+            # Security migration findings  
+            security_migration = detailed_analysis.get("security_migration", {})
+            if security_migration:
+                websecurity_usage = security_migration.get('websecurity_adapter_usage', [])
+                if websecurity_usage:
+                    context_parts.append("Spring Security updates needed")
+            
+            # Build context string
+            if context_parts:
+                context = "Overall Migration Analysis Context:\n" + "\n".join(f"- {part}" for part in context_parts)
+            else:
+                context = "Limited analysis context available - performing file-level analysis"
+            
+            return context
+            
+        except Exception as e:
+            return f"Analysis context error: {str(e)} - using file-level analysis only"
+    
+    def _get_empty_changes(self):
+        """Return an empty changes structure when no changes are needed."""
+        return {
+            "javax_to_jakarta": [],
+            "spring_security_updates": [],
+            "dependency_updates": [],
+            "configuration_updates": [],
+            "other_changes": []
+        }
+    
+    def _validate_change(self, change, file_path):
+        """Validate that a change object has the required fields."""
+        try:
+            if not isinstance(change, dict):
+                print(f"     Warning: Change for {file_path} is not a dictionary")
+                return False
+            
+            # Required fields for all changes
+            required_fields = ["file", "type", "description"]
+            for field in required_fields:
+                if field not in change:
+                    print(f"     Warning: Change for {file_path} missing required field: {field}")
+                    return False
+            
+            # Ensure file path is correct
+            if change.get("file") != file_path:
+                change["file"] = file_path  # Fix the file path
+            
+            # Add default values for optional fields
+            if "automatic" not in change:
+                change["automatic"] = False
+            
+            if "explanation" not in change:
+                change["explanation"] = "Migration change required"
+            
+            if "line_numbers" not in change:
+                change["line_numbers"] = []
+            
+            return True
+            
+        except Exception as e:
+            print(f"     Warning: Error validating change for {file_path}: {e}")
+            return False

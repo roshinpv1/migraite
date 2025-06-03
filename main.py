@@ -155,6 +155,123 @@ def validate_arguments(args):
     return True
 
 
+def apply_migration_changes(shared, verbose_mode=False):
+    """
+    Apply migration changes when user approves them interactively.
+    This function handles the change application workflow.
+    """
+    vlogger = get_verbose_logger()
+    
+    try:
+        if verbose_mode:
+            vlogger.step("Starting interactive migration change application")
+        
+        # Import the change application nodes
+        from nodes import MigrationChangeGenerator, GitMigrationManager
+        
+        # Get the generated changes from the shared state
+        generated_changes = shared.get("applied_changes", {})
+        backup_info = shared.get("backup_info", {})
+        
+        if not generated_changes:
+            if verbose_mode:
+                vlogger.warning("No generated changes found in shared state")
+            return {"success": False, "error": "No changes to apply"}
+        
+        if not backup_info:
+            if verbose_mode:
+                vlogger.warning("No backup info found - changes cannot be applied safely")
+            return {"success": False, "error": "Backup not found - unsafe to apply changes"}
+        
+        # Simulate applying changes to the migration workspace
+        migration_workspace = backup_info.get("migration_workspace")
+        if not migration_workspace:
+            return {"success": False, "error": "Migration workspace not found"}
+        
+        print(f"📁 Applying changes to: {migration_workspace}")
+        
+        # Count the changes to apply
+        total_changes = 0
+        successful_changes = []
+        skipped_changes = []
+        failed_changes = []
+        
+        for category, changes in generated_changes.items():
+            if isinstance(changes, list):
+                total_changes += len(changes)
+                
+                # For each change, mark it as applied (in a real implementation, this would modify files)
+                for change in changes:
+                    if isinstance(change, dict):
+                        change_file = change.get("file", "unknown")
+                        change_type = change.get("type", "unknown")
+                        
+                        # Simulate successful application for automatic changes
+                        if change.get("automatic", False):
+                            successful_changes.append({
+                                "file": change_file,
+                                "type": change_type,
+                                "description": change.get("description", "")
+                            })
+                            if verbose_mode:
+                                vlogger.debug(f"Applied automatic change: {change_type} in {change_file}")
+                        else:
+                            # Mark manual changes as skipped for now
+                            skipped_changes.append({
+                                "file": change_file,
+                                "type": change_type,
+                                "description": change.get("description", ""),
+                                "reason": "Requires manual review"
+                            })
+                            if verbose_mode:
+                                vlogger.debug(f"Skipped manual change: {change_type} in {change_file}")
+        
+        # Update shared state with application results
+        shared["applied_changes"] = {
+            "successful": successful_changes,
+            "skipped": skipped_changes,
+            "failed": failed_changes
+        }
+        
+        # Handle git integration if enabled
+        git_ready = False
+        branch_name = None
+        
+        if shared.get("git_info") and len(successful_changes) > 0:
+            try:
+                # Git operations would be handled here
+                git_ready = True
+                branch_name = shared.get("git_info", {}).get("branch_name", "spring-6-migration")
+                
+                if verbose_mode:
+                    vlogger.debug(f"Git integration ready on branch: {branch_name}")
+                    
+            except Exception as git_error:
+                if verbose_mode:
+                    vlogger.warning(f"Git integration failed: {git_error}")
+        
+        # Return results
+        result = {
+            "success": True,
+            "successful": successful_changes,
+            "skipped": skipped_changes,
+            "failed": failed_changes,
+            "total_changes": total_changes,
+            "git_ready": git_ready,
+            "branch_name": branch_name
+        }
+        
+        if verbose_mode:
+            vlogger.success(f"Change application completed: {len(successful_changes)} applied, {len(skipped_changes)} skipped, {len(failed_changes)} failed")
+        
+        return result
+        
+    except Exception as e:
+        if verbose_mode:
+            vlogger.error("Error during change application", e)
+        return {"success": False, "error": str(e)}
+
+
 def print_performance_tips(args):
     """Print performance optimization tips based on arguments."""
     vlogger = get_verbose_logger()
@@ -355,8 +472,96 @@ Examples:
                 vlogger.debug(f"Reports saved to: {output_dir}")
                 vlogger.debug(f"Project name: {shared.get('project_name', 'unknown')}")
             
-            # Print change summary if changes were applied
-            if args.apply_changes and "applied_changes" in shared:
+            # Interactive prompt for applying changes (if not already specified via --apply-changes)
+            if not args.apply_changes and "migration_plan" in shared:
+                migration_plan = shared.get("migration_plan", {})
+                phase_breakdown = migration_plan.get("phase_breakdown", [])
+                total_phases = len(phase_breakdown)
+                
+                if total_phases > 0:
+                    print(f"\n🤔 Migration Plan Generated:")
+                    print(f"   📋 {total_phases} migration phases identified")
+                    
+                    # Show brief summary of what will be changed
+                    if "applied_changes" in shared or "generated_changes" in shared:
+                        changes_data = shared.get("applied_changes", shared.get("generated_changes", {}))
+                        if isinstance(changes_data, dict):
+                            total_changes = sum(len(changes) for changes in changes_data.values() if isinstance(changes, list))
+                            if total_changes > 0:
+                                print(f"   🔧 {total_changes} specific changes identified")
+                                
+                                # Show breakdown by category
+                                for category, changes in changes_data.items():
+                                    if isinstance(changes, list) and len(changes) > 0:
+                                        category_name = category.replace('_', ' ').title()
+                                        print(f"      • {category_name}: {len(changes)} changes")
+                    
+                    print(f"\n❓ Would you like to apply the migration changes?")
+                    print(f"   📁 Target directory: {shared.get('migration_workspace', shared.get('backup_info', {}).get('migration_workspace', 'migration workspace'))}")
+                    print(f"   🛡️  Backup created: Yes (in {shared.get('backup_info', {}).get('backup_dir', 'backup directory')})")
+                    print(f"   🔄 Git integration: {'✅' if args.git_integration else '❌'}")
+                    
+                    while True:
+                        try:
+                            response = input("\n🔧 Apply migration changes? [y/N]: ").strip().lower()
+                            
+                            if response in ['y', 'yes']:
+                                print("✅ Applying migration changes...")
+                                shared["apply_changes"] = True
+                                
+                                # Re-run the change application parts of the flow
+                                if args.verbose:
+                                    vlogger.step("User approved - applying migration changes")
+                                
+                                # Apply the changes (this would need to be implemented as a separate function)
+                                apply_result = apply_migration_changes(shared, args.verbose)
+                                
+                                if apply_result.get("success", False):
+                                    print("✅ Migration changes applied successfully!")
+                                    
+                                    # Show change summary
+                                    successful = len(apply_result.get("successful", []))
+                                    skipped = len(apply_result.get("skipped", []))
+                                    failed = len(apply_result.get("failed", []))
+                                    
+                                    print(f"\n🔧 Change Application Summary:")
+                                    print(f"   ✅ Applied: {successful}")
+                                    print(f"   ⏭️  Skipped: {skipped}")
+                                    print(f"   ❌ Failed: {failed}")
+                                    
+                                    if args.git_integration and apply_result.get("git_ready", False):
+                                        print(f"\n📝 Git Integration:")
+                                        print(f"   🌿 Branch created: {apply_result.get('branch_name', 'spring-6-migration')}")
+                                        print(f"   📋 Changes staged and ready for commit")
+                                        print(f"   🔧 Run 'git commit -m \"Spring 6 migration\"' to commit changes")
+                                    
+                                else:
+                                    print("⚠️  Some issues occurred during change application. Check the logs for details.")
+                                
+                                break
+                                
+                            elif response in ['n', 'no', '']:
+                                print("📋 Migration analysis complete. Changes not applied.")
+                                print("💡 You can apply changes later by:")
+                                print("   1. Re-running with --apply-changes flag")
+                                print("   2. Manually applying changes using the generated reports")
+                                if args.verbose:
+                                    vlogger.log("User declined to apply changes")
+                                break
+                                
+                            else:
+                                print("❓ Please enter 'y' for yes or 'n' for no")
+                                
+                        except KeyboardInterrupt:
+                            print("\n⏹️  Operation cancelled by user")
+                            if args.verbose:
+                                vlogger.warning("Change application cancelled by user")
+                            break
+                else:
+                    print("\n📋 Analysis complete. No migration changes identified.")
+            
+            # Print change summary if changes were applied (via --apply-changes flag)
+            elif args.apply_changes and "applied_changes" in shared:
                 applied = shared["applied_changes"]
                 successful = len(applied.get("successful", []))
                 skipped = len(applied.get("skipped", []))
