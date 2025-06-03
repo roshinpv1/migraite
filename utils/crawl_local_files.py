@@ -1,6 +1,7 @@
 import os
 import fnmatch
 import pathspec
+from .file_encoding_detector import RobustFileReader
 
 
 def crawl_local_files(
@@ -12,6 +13,8 @@ def crawl_local_files(
 ):
     """
     Crawl files in a local directory with similar interface as crawl_github_files.
+    Enhanced with robust file reading to handle encoding issues gracefully.
+    
     Args:
         directory (str): Path to local directory
         include_patterns (set): File patterns to include (e.g. {"*.py", "*.js"})
@@ -20,24 +23,41 @@ def crawl_local_files(
         use_relative_paths (bool): Whether to use paths relative to directory
 
     Returns:
-        dict: {"files": {filepath: content}}
+        dict: {"files": {filepath: content}, "stats": {processing_statistics}}
     """
     if not os.path.isdir(directory):
         raise ValueError(f"Directory does not exist: {directory}")
 
     files_dict = {}
+    
+    # Statistics tracking
+    stats = {
+        "total_files_found": 0,
+        "files_included": 0,
+        "files_excluded_gitignore": 0,
+        "files_excluded_patterns": 0,
+        "files_excluded_size": 0,
+        "files_binary_skipped": 0,
+        "files_encoding_error": 0,
+        "files_read_successfully": 0,
+        "encoding_fallbacks_used": 0
+    }
 
     # --- Load .gitignore ---
     gitignore_path = os.path.join(directory, ".gitignore")
     gitignore_spec = None
     if os.path.exists(gitignore_path):
         try:
-            with open(gitignore_path, "r", encoding="utf-8-sig") as f:
-                gitignore_patterns = f.readlines()
-            gitignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", gitignore_patterns)
-            print(f"Loaded .gitignore patterns from {gitignore_path}")
+            # Use robust file reader for .gitignore
+            content, encoding, status = RobustFileReader.read_file_with_fallback(gitignore_path)
+            if content is not None:
+                gitignore_patterns = content.splitlines()
+                gitignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", gitignore_patterns)
+                print(f"Loaded .gitignore patterns from {gitignore_path} (encoding: {encoding})")
+            else:
+                print(f"Warning: Could not read .gitignore file {gitignore_path}: {status}")
         except Exception as e:
-            print(f"Warning: Could not read or parse .gitignore file {gitignore_path}: {e}")
+            print(f"Warning: Could not parse .gitignore file {gitignore_path}: {e}")
 
     print(f"Scanning directory: {directory}")
     print(f"Include patterns: {include_patterns}")
@@ -46,50 +66,36 @@ def crawl_local_files(
     # Find all files
     all_files = []
     for root, dirs, files in os.walk(directory):
-        # Filter directories using .gitignore and exclude_patterns early
-        excluded_dirs = set()
-        for d in dirs:
-            dirpath = os.path.join(root, d)
-            dirpath_rel = os.path.relpath(dirpath, directory)
-
-            if gitignore_spec and gitignore_spec.match_file(dirpath_rel):
-                excluded_dirs.add(d)
-                continue
-
-            if exclude_patterns:
-                for pattern in exclude_patterns:
-                    # Check both the full relative path and just the directory name
-                    if fnmatch.fnmatch(dirpath_rel, pattern) or fnmatch.fnmatch(d, pattern):
-                        excluded_dirs.add(d)
-                        break
-
-        # Remove excluded directories to prevent walking into them
-        for d in excluded_dirs:
-            if d in dirs:
-                dirs.remove(d)
-
-        for filename in files:
-            filepath = os.path.join(root, filename)
-            all_files.append(filepath)
+        for file in files:
+            all_files.append(os.path.join(root, file))
 
     total_files = len(all_files)
-    print(f"Found {total_files} files to process")
+    stats["total_files_found"] = total_files
+    
+    print(f"Found {total_files} files in total")
+    
     processed_files = 0
-    included_files = 0
 
     for filepath in all_files:
         relpath = os.path.relpath(filepath, directory) if use_relative_paths else filepath
+        processed_files += 1
 
         # --- Exclusion check ---
         excluded = False
+        exclusion_reason = None
+        
         if gitignore_spec and gitignore_spec.match_file(relpath):
             excluded = True
+            exclusion_reason = "gitignore"
+            stats["files_excluded_gitignore"] += 1
 
         if not excluded and exclude_patterns:
             for pattern in exclude_patterns:
                 # Check if the pattern matches any part of the path
                 if fnmatch.fnmatch(relpath, pattern) or any(fnmatch.fnmatch(part, pattern) for part in relpath.split(os.sep)):
                     excluded = True
+                    exclusion_reason = "exclude_pattern"
+                    stats["files_excluded_patterns"] += 1
                     break
 
         # --- Inclusion check ---
@@ -103,46 +109,82 @@ def crawl_local_files(
         else:
             included = True  # Include all files if no include patterns specified
 
-        processed_files += 1  # Increment processed count regardless of inclusion/exclusion
-
-        status = "processed"
+        # Determine final status
         if not included or excluded:
-            status = "skipped (excluded)"
-            # Print progress for skipped files due to exclusion
+            status = f"skipped ({exclusion_reason or 'not_included'})"
+            # Print progress for skipped files
             if total_files > 0:
                 percentage = (processed_files / total_files) * 100
                 rounded_percentage = int(percentage)
                 print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
-            continue  # Skip to next file if not included or excluded
+            continue  # Skip to next file
 
-        if max_file_size and os.path.getsize(filepath) > max_file_size:
-            status = "skipped (size limit)"
-            # Print progress for skipped files due to size limit
-            if total_files > 0:
-                percentage = (processed_files / total_files) * 100
-                rounded_percentage = int(percentage)
-                print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
-            continue  # Skip large files
-
-        # --- File is being processed ---        
+        # --- File reading with robust encoding handling ---
         try:
-            with open(filepath, "r", encoding="utf-8-sig") as f:
-                content = f.read()
-            files_dict[relpath] = content
-            included_files += 1
+            # Use robust file reader
+            content, encoding_used, read_status = RobustFileReader.read_file_with_fallback(
+                filepath, 
+                max_file_size=max_file_size
+            )
+            
+            if content is not None:
+                files_dict[relpath] = content
+                stats["files_included"] += 1
+                stats["files_read_successfully"] += 1
+                
+                # Track encoding fallbacks
+                if 'replacement' in read_status:
+                    stats["encoding_fallbacks_used"] += 1
+                    status = f"read with encoding fallback ({encoding_used})"
+                else:
+                    status = f"read successfully ({encoding_used})"
+                    
+            else:
+                # Handle different read failure reasons
+                if read_status == "size_skipped":
+                    stats["files_excluded_size"] += 1
+                    status = "skipped (size limit)"
+                elif read_status == "binary_skipped":
+                    stats["files_binary_skipped"] += 1
+                    status = "skipped (binary file)"
+                elif read_status == "encoding_error":
+                    stats["files_encoding_error"] += 1
+                    status = "skipped (encoding error)"
+                else:
+                    stats["files_encoding_error"] += 1
+                    status = f"skipped ({read_status})"
+                    
         except Exception as e:
-            print(f"Warning: Could not read file {filepath}: {e}")
-            status = "skipped (read error)"
+            stats["files_encoding_error"] += 1
+            status = f"skipped (unexpected error: {str(e)[:50]})"
+            print(f"Warning: Unexpected error reading file {filepath}: {e}")
 
-        # --- Print progress for processed or error files ---
+        # --- Print progress ---
         if total_files > 0:
             percentage = (processed_files / total_files) * 100
             rounded_percentage = int(percentage)
             print(f"\033[92mProgress: {processed_files}/{total_files} ({rounded_percentage}%) {relpath} [{status}]\033[0m")
 
-    print(f"Included {included_files} out of {total_files} files in the analysis")
+    # Print summary statistics
+    print(f"\n📊 File Processing Summary:")
+    print(f"   Total files found: {stats['total_files_found']}")
+    print(f"   Files successfully read: {stats['files_read_successfully']}")
+    print(f"   Files with encoding fallbacks: {stats['encoding_fallbacks_used']}")
+    print(f"   Files excluded (gitignore): {stats['files_excluded_gitignore']}")
+    print(f"   Files excluded (patterns): {stats['files_excluded_patterns']}")
+    print(f"   Files excluded (size): {stats['files_excluded_size']}")
+    print(f"   Binary files skipped: {stats['files_binary_skipped']}")
+    print(f"   Encoding errors: {stats['files_encoding_error']}")
     
-    return {"files": files_dict}
+    if stats['encoding_fallbacks_used'] > 0:
+        print(f"   ⚠️  {stats['encoding_fallbacks_used']} files read with encoding fallbacks")
+    
+    if stats['files_encoding_error'] > 0:
+        print(f"   ⚠️  {stats['files_encoding_error']} files could not be read due to encoding issues")
+    
+    print(f"✅ Included {stats['files_included']} out of {stats['total_files_found']} files in the analysis")
+    
+    return {"files": files_dict, "stats": stats}
 
 
 if __name__ == "__main__":

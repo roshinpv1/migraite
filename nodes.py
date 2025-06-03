@@ -4,7 +4,7 @@ import yaml
 import json
 from pocketflow import Node, BatchNode
 from utils.crawl_github_files import crawl_github_files
-from utils.call_llm import call_llm
+from utils.call_llm import call_llm, auto_configure_timeouts_for_repository_size, configure_maximum_timeouts
 from utils.crawl_local_files import crawl_local_files
 from utils.performance_monitor import (
     get_performance_monitor,
@@ -117,14 +117,26 @@ class FetchRepo(Node):
             )
 
         # Convert dict to list of tuples: [(path, content), ...]
-        files_list = list(result.get("files", {}).items())
+        result_data = result.get("files", {})
+        files_list = list(result_data.items())
+        
+        # Extract statistics if available
+        crawl_stats = result.get("stats", {})
+        
         if len(files_list) == 0:
             if prep_res["verbose_mode"]:
                 vlogger.error("No files found matching criteria")
-            raise (ValueError("Failed to fetch files"))
+            raise ValueError("Failed to fetch files")
         
         if prep_res["verbose_mode"]:
             vlogger.debug(f"Initial file count: {len(files_list)}")
+            
+            # Show detailed statistics if available
+            if crawl_stats:
+                vlogger.debug("File processing statistics:")
+                for key, value in crawl_stats.items():
+                    vlogger.debug(f"  {key}: {value}")
+            
             # Show sample of files found
             sample_files = files_list[:5]
             for path, content in sample_files:
@@ -132,6 +144,17 @@ class FetchRepo(Node):
                 vlogger.file_processing(path, "Found", f"{file_size:.1f} KB")
             if len(files_list) > 5:
                 vlogger.debug(f"... and {len(files_list) - 5} more files")
+        
+        # Show encoding statistics
+        if crawl_stats.get("encoding_fallbacks_used", 0) > 0:
+            print(f"⚠️  {crawl_stats['encoding_fallbacks_used']} files read with encoding fallbacks")
+            if prep_res["verbose_mode"]:
+                vlogger.warning(f"{crawl_stats['encoding_fallbacks_used']} files required encoding fallbacks")
+        
+        if crawl_stats.get("files_encoding_error", 0) > 0:
+            print(f"⚠️  {crawl_stats['files_encoding_error']} files skipped due to encoding errors")
+            if prep_res["verbose_mode"]:
+                vlogger.warning(f"{crawl_stats['files_encoding_error']} files had encoding errors")
         
         # Performance optimization: filter files if enabled
         if prep_res["enable_optimization"] and prep_res["max_files_for_analysis"]:
@@ -185,6 +208,10 @@ class FetchRepo(Node):
         
         shared["files"] = exec_res  # List of (path, content) tuples
 
+        # Automatically configure timeouts based on repository size
+        file_count = len(exec_res)
+        auto_configure_timeouts_for_repository_size(file_count)
+
         # Store optimization settings for downstream nodes
         shared["optimization_settings"] = ResourceOptimizer.get_recommended_settings(
             total_files=len(exec_res),
@@ -195,6 +222,7 @@ class FetchRepo(Node):
             vlogger.debug(f"Stored {len(exec_res)} files in shared state")
             optimization_settings = shared["optimization_settings"]
             vlogger.debug(f"Optimization settings: parallel={optimization_settings.get('enable_parallel_processing')}")
+            vlogger.debug(f"Timeout auto-configuration applied for {file_count} files")
 
 
 # ==========================================
@@ -263,7 +291,7 @@ class SpringMigrationAnalyzer(Node):
         file_listing = "\n".join(file_summary)
         
         return context, file_listing, project_name, use_cache, optimization_settings
-    
+
     def exec(self, prep_res):
         monitor = get_performance_monitor()
         monitor.start_operation("spring_migration_analysis")
@@ -273,6 +301,12 @@ class SpringMigrationAnalyzer(Node):
         
         # Check if we should use fallback for very large contexts
         enable_fallback_for_large_repos = len(context) > 100000
+        
+        # Use maximum timeout for large repositories
+        use_max_timeout = len(context) > 50000 or len(file_listing.split('\n')) > 200
+        if use_max_timeout:
+            print("⚡ Large repository detected - using maximum timeout settings...")
+            configure_maximum_timeouts()
         
         if enable_fallback_for_large_repos:
             print("⚡ Large repository detected - using optimized analysis...")
@@ -906,7 +940,7 @@ Analyze the codebase thoroughly and provide the complete JSON response based on 
             vlogger.success(f"Generated comprehensive fallback analysis for {project_size} project ({file_count} files)")
         
         return fallback_analysis
-    
+
     def post(self, shared, prep_res, exec_res):
         shared["migration_analysis"] = exec_res
         print("✅ Migration analysis completed")
@@ -930,29 +964,34 @@ class MigrationPlanGenerator(Node):
         analysis, project_name, use_cache = prep_res
         print(f"Generating detailed migration plan...")
         
-        prompt = f"""Based on the Spring migration analysis for project `{project_name}`, create a detailed, actionable migration plan.
+        prompt = f"""
+You are analyzing a Spring Boot project for migration from version 2.x to 3.x.
 
-## Analysis Results:
+Based on the following analysis results, create a comprehensive, actionable migration plan:
+
+**Project:** {project_name}
+**Analysis Results:**
 {json.dumps(analysis, indent=2)}
 
-Generate a comprehensive migration plan in JSON format with REALISTIC estimates based on the analysis:
+**IMPORTANT:** You MUST include ALL required fields in your JSON response:
+- migration_strategy (with approach, rationale, estimated_timeline, team_size_recommendation)
+- phase_breakdown (array of phases with tasks, risks, success criteria)
+- automation_recommendations (array of automation tools and guidance)
+- testing_strategy (with unit_tests, integration_tests, regression_testing)
 
-**Guidelines for Realistic Estimates:**
-- Small projects (5-15 person-days): 1-2 developers, 2-6 weeks timeline
-- Medium projects (15-30 person-days): 2-3 developers, 6-12 weeks timeline  
-- Large projects (30-60 person-days): 3-5 developers, 3-6 months timeline
+Generate a detailed migration plan based on the actual findings from the analysis.
 
-**Team Size Guidelines:**
-- 1-2 developers: Small projects, simple migrations
-- 2-3 developers: Medium projects, moderate complexity
-- 3-5 developers: Large projects, high complexity
-- NEVER recommend more than 5 developers for a migration project
+**Migration Complexity Guidelines:**
+- Simple projects (< 50 files): 1-2 phases, 2-4 weeks
+- Medium projects (50-200 files): 3-4 phases, 1-2 months  
+- Large projects (200+ files): 4-6 phases, 2-4 months
 
 **Timeline Guidelines:**
 - Include time for testing, validation, and deployment
 - Account for parallel development work
 - Consider team availability and other project commitments
 
+**REQUIRED JSON OUTPUT FORMAT - Include ALL sections:**
 ```json
 {{
   "migration_strategy": {{
@@ -1019,7 +1058,7 @@ Generate a comprehensive migration plan in JSON format with REALISTIC estimates 
 }}
 ```
 
-Focus on practical, actionable steps that a development team can follow."""
+**CRITICAL:** Return ONLY the JSON object. Do not include any explanatory text before or after the JSON. Ensure all required top-level fields are present: migration_strategy, phase_breakdown, automation_recommendations, testing_strategy."""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -1054,22 +1093,85 @@ Focus on practical, actionable steps that a development team can follow."""
             # Try to parse JSON
             plan = json.loads(json_str)
             
-            # Basic validation
+            # Enhanced validation with better error handling
             required_keys = ["migration_strategy", "phase_breakdown", "automation_recommendations", "testing_strategy"]
+            missing_keys = []
+            
             for key in required_keys:
                 if key not in plan:
-                    print(f"Warning: Missing required key in plan: {key}")
+                    missing_keys.append(key)
+                    
+            if missing_keys:
+                print(f"Warning: Missing required keys in migration plan: {', '.join(missing_keys)}")
+                print("         Using fallback values for missing sections...")
+                
+                # Add missing keys with appropriate defaults
+                for key in missing_keys:
                     plan[key] = self._get_default_plan_value(key)
+                    
+                # Log the issue for debugging
+                if "files" in analysis:
+                    file_count = len(analysis["files"])
+                    print(f"         Plan generated for {file_count} files, but LLM response was incomplete")
+            
+            # Validate structure of included keys
+            self._validate_plan_structure(plan)
             
             return plan
             
         except json.JSONDecodeError as e:
             print(f"JSON parsing error in migration plan: {e}")
             print(f"Response content (first 500 chars): {response[:500]}")
+            print("Falling back to structured default plan...")
             return self._get_fallback_plan(analysis, project_name)
         except Exception as e:
             print(f"Error processing migration plan LLM response: {e}")
+            print("Falling back to structured default plan...")
             return self._get_fallback_plan(analysis, project_name)
+    
+    def _validate_plan_structure(self, plan):
+        """Validate the structure of migration plan components."""
+        try:
+            # Validate migration_strategy structure
+            if "migration_strategy" in plan:
+                strategy = plan["migration_strategy"]
+                if not isinstance(strategy, dict):
+                    print("Warning: migration_strategy should be an object, fixing structure...")
+                    plan["migration_strategy"] = self._get_default_plan_value("migration_strategy")
+                else:
+                    # Ensure required strategy fields exist
+                    required_strategy_fields = ["approach", "rationale", "estimated_timeline", "team_size_recommendation"]
+                    for field in required_strategy_fields:
+                        if field not in strategy:
+                            strategy[field] = f"Not specified - requires manual planning"
+            
+            # Validate phase_breakdown structure
+            if "phase_breakdown" in plan:
+                phases = plan["phase_breakdown"]
+                if not isinstance(phases, list):
+                    print("Warning: phase_breakdown should be an array, fixing structure...")
+                    plan["phase_breakdown"] = self._get_default_plan_value("phase_breakdown")
+                elif len(phases) == 0:
+                    print("Warning: phase_breakdown is empty, adding default phase...")
+                    plan["phase_breakdown"] = self._get_default_plan_value("phase_breakdown")
+            
+            # Validate automation_recommendations structure
+            if "automation_recommendations" in plan:
+                recommendations = plan["automation_recommendations"]
+                if not isinstance(recommendations, list):
+                    print("Warning: automation_recommendations should be an array, fixing structure...")
+                    plan["automation_recommendations"] = self._get_default_plan_value("automation_recommendations")
+            
+            # Validate testing_strategy structure
+            if "testing_strategy" in plan:
+                testing = plan["testing_strategy"]
+                if not isinstance(testing, dict):
+                    print("Warning: testing_strategy should be an object, fixing structure...")
+                    plan["testing_strategy"] = self._get_default_plan_value("testing_strategy")
+                    
+        except Exception as e:
+            print(f"Warning: Error validating plan structure: {e}")
+            # Structure validation failed, but don't break the entire process
     
     def _clean_plan_json_string(self, json_str):
         """Clean common JSON formatting issues in migration plan."""
@@ -1108,52 +1210,153 @@ Focus on practical, actionable steps that a development team can follow."""
         defaults = {
             "migration_strategy": {
                 "approach": "Phased",
-                "rationale": "Manual plan generation required due to parsing issues",
-                "estimated_timeline": "To be determined manually",
+                "rationale": "Using phased approach for safer migration. LLM plan generation incomplete - manual review recommended.",
+                "estimated_timeline": "4-8 weeks (requires manual estimation based on project complexity)",
                 "team_size_recommendation": "2-3 developers"
             },
             "phase_breakdown": [
                 {
                     "phase": 1,
-                    "name": "Manual Planning Required",
-                    "description": "LLM plan generation failed - manual planning recommended",
-                    "duration": "TBD",
-                    "deliverables": ["Manual migration plan"],
-                    "tasks": [],
-                    "risks": ["Plan generation failed"],
-                    "success_criteria": ["Manual plan created"]
+                    "name": "Preparation and Assessment",
+                    "description": "Complete manual assessment and prepare for migration",
+                    "duration": "1 week",
+                    "deliverables": ["Migration plan", "Team training", "Environment setup"],
+                    "tasks": [
+                        {
+                            "task_id": "manual-assessment",
+                            "title": "Complete Migration Assessment",
+                            "description": "Review automated analysis results and create detailed migration plan",
+                            "complexity": "Medium",
+                            "estimated_hours": "16-24 hours",
+                            "dependencies": [],
+                            "automation_potential": "Low",
+                            "tools_required": ["Manual review", "Analysis results"]
+                        }
+                    ],
+                    "risks": ["Incomplete automated analysis", "Missing migration details"],
+                    "success_criteria": ["Detailed plan created", "Team understands migration scope"]
+                },
+                {
+                    "phase": 2,
+                    "name": "Spring Boot and Dependency Updates",
+                    "description": "Update Spring Boot version and related dependencies",
+                    "duration": "1-2 weeks",
+                    "deliverables": ["Updated build files", "Resolved dependency conflicts"],
+                    "tasks": [
+                        {
+                            "task_id": "spring-boot-upgrade",
+                            "title": "Upgrade Spring Boot to 3.x",
+                            "description": "Update Spring Boot version in build files and resolve conflicts",
+                            "complexity": "Medium",
+                            "estimated_hours": "12-20 hours",
+                            "dependencies": ["manual-assessment"],
+                            "automation_potential": "Medium",
+                            "tools_required": ["Build tools", "Dependency management"]
+                        }
+                    ],
+                    "risks": ["Version conflicts", "Breaking dependency changes"],
+                    "success_criteria": ["Application builds successfully", "No dependency conflicts"]
+                },
+                {
+                    "phase": 3,
+                    "name": "Jakarta EE Migration",
+                    "description": "Migrate from javax.* to jakarta.* imports and references",
+                    "duration": "1-2 weeks",
+                    "deliverables": ["Updated imports", "Migrated code", "Configuration updates"],
+                    "tasks": [
+                        {
+                            "task_id": "jakarta-migration",
+                            "title": "Convert javax to jakarta imports",
+                            "description": "Replace all javax.* imports and references with jakarta.* equivalents",
+                            "complexity": "Medium",
+                            "estimated_hours": "20-30 hours",
+                            "dependencies": ["spring-boot-upgrade"],
+                            "automation_potential": "High",
+                            "tools_required": ["IDE refactoring", "Search and replace tools"]
+                        }
+                    ],
+                    "risks": ["Missed references", "Configuration issues"],
+                    "success_criteria": ["All javax references updated", "Application compiles"]
+                },
+                {
+                    "phase": 4,
+                    "name": "Testing and Validation",
+                    "description": "Comprehensive testing of migrated application",
+                    "duration": "1-2 weeks",
+                    "deliverables": ["Test results", "Performance validation", "Deployment verification"],
+                    "tasks": [
+                        {
+                            "task_id": "comprehensive-testing",
+                            "title": "Execute Full Test Suite",
+                            "description": "Run all tests and validate application functionality",
+                            "complexity": "High",
+                            "estimated_hours": "24-40 hours",
+                            "dependencies": ["jakarta-migration"],
+                            "automation_potential": "High",
+                            "tools_required": ["Test frameworks", "Performance monitoring"]
+                        }
+                    ],
+                    "risks": ["Test failures", "Performance regression"],
+                    "success_criteria": ["All tests pass", "Performance meets requirements"]
                 }
             ],
             "automation_recommendations": [
                 {
-                    "tool": "Manual Review",
-                    "purpose": "Plan generation failed - manual review required",
-                    "setup_instructions": "Review migration analysis and create plan manually",
-                    "coverage": "100% manual"
+                    "tool": "IDE Refactoring Tools",
+                    "purpose": "Automate javax to jakarta import replacements",
+                    "setup_instructions": "Use IDE find/replace or refactoring tools to update imports systematically",
+                    "coverage": "80-90% of import changes"
+                },
+                {
+                    "tool": "OpenRewrite",
+                    "purpose": "Automated code transformation for Spring Boot migration",
+                    "setup_instructions": "Add OpenRewrite plugin to build file and configure Spring Boot 3 migration recipes",
+                    "coverage": "60-70% of code changes"
+                },
+                {
+                    "tool": "Spring Boot Migrator",
+                    "purpose": "Comprehensive migration analysis and code transformation",
+                    "setup_instructions": "Install and run Spring Boot Migrator tool against codebase",
+                    "coverage": "50-60% of migration tasks"
                 }
             ],
             "manual_changes": [
                 {
-                    "category": "Plan Generation",
-                    "changes": ["Manual planning required"],
-                    "rationale": "LLM plan parsing failed"
+                    "category": "Configuration Updates",
+                    "changes": ["Review and update application.properties/yml files", "Update Spring Security configuration", "Verify actuator endpoint configurations"],
+                    "rationale": "Configuration changes require manual review to ensure compatibility"
+                },
+                {
+                    "category": "Custom Code Review",
+                    "changes": ["Review custom Spring components", "Update deprecated API usage", "Validate third-party integrations"],
+                    "rationale": "Custom code requires manual analysis for migration compatibility"
                 }
             ],
             "testing_strategy": {
-                "unit_tests": "To be determined manually",
-                "integration_tests": "To be determined manually",
-                "regression_testing": "To be determined manually"
+                "unit_tests": "Update test frameworks (JUnit 4 to 5), review test annotations, validate mock configurations",
+                "integration_tests": "Update Spring test slices, verify test container configurations, validate security test setup",
+                "regression_testing": "Execute full test suite, perform smoke testing, validate critical user journeys"
             },
             "rollback_plan": {
-                "triggers": ["Migration failure"],
-                "steps": ["Restore from backup"],
-                "data_considerations": "Manual assessment required"
+                "triggers": ["Critical test failures", "Performance degradation", "Production issues"],
+                "steps": ["Stop deployment", "Restore from backup/previous version", "Verify system stability", "Document issues"],
+                "data_considerations": "Ensure database schema compatibility, backup configuration files"
             },
             "success_metrics": [
                 {
-                    "metric": "Manual Assessment",
-                    "target": "TBD",
-                    "measurement_method": "Manual review"
+                    "metric": "Build Success Rate",
+                    "target": "100% successful builds",
+                    "measurement_method": "CI/CD pipeline execution"
+                },
+                {
+                    "metric": "Test Coverage",
+                    "target": "Maintain or improve existing coverage",
+                    "measurement_method": "Test coverage tools"
+                },
+                {
+                    "metric": "Performance Baseline",
+                    "target": "No degradation from current performance",
+                    "measurement_method": "Performance testing and monitoring"
                 }
             ]
         }
@@ -1326,16 +1529,16 @@ Focus on practical, actionable steps that a development team can follow."""
         }
         
         return fallback_plan
-    
+
     def post(self, shared, prep_res, exec_res):
         shared["migration_plan"] = exec_res
         print("✅ Migration plan generated")
         return "default"
 
 
-class FileBackupManager(Node):
+class EnhancedFileBackupManager(Node):
     """
-    Creates backups of files before applying migration changes.
+    Creates backups with proper directory structure preservation for git integration.
     """
     
     def prep(self, shared):
@@ -1355,22 +1558,41 @@ class FileBackupManager(Node):
         # Create backup directory with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_dir = os.path.join(output_dir, f"{project_name}_backup_{timestamp}")
-        os.makedirs(backup_dir, exist_ok=True)
         
-        print(f"📦 Creating backup of {len(files_data)} files...")
+        # Create migration workspace with proper directory structure
+        migration_workspace = os.path.join(output_dir, f"{project_name}_migration_{timestamp}")
+        
+        os.makedirs(backup_dir, exist_ok=True)
+        os.makedirs(migration_workspace, exist_ok=True)
+        
+        print(f"📦 Creating structured backup and migration workspace...")
         
         backup_info = {
             "backup_dir": backup_dir,
+            "migration_workspace": migration_workspace,
             "timestamp": timestamp,
-            "files_backed_up": []
+            "files_backed_up": [],
+            "migration_files": []
         }
         
         for i, (file_path, content) in enumerate(files_data):
-            # Create backup file path
+            # Create backup with flattened names (for safety)
             backup_file_path = os.path.join(backup_dir, file_path.replace("/", "_").replace("\\", "_"))
             
-            # Write backup file
+            # Create migration file with proper directory structure
+            migration_file_path = os.path.join(migration_workspace, file_path)
+            migration_dir = os.path.dirname(migration_file_path)
+            
+            # Ensure directory exists for migration file
+            if migration_dir:
+                os.makedirs(migration_dir, exist_ok=True)
+            
+            # Write backup file (flattened)
             with open(backup_file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            # Write migration file (structured)
+            with open(migration_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             
             backup_info["files_backed_up"].append({
@@ -1378,19 +1600,321 @@ class FileBackupManager(Node):
                 "backup_path": backup_file_path
             })
             
+            backup_info["migration_files"].append({
+                "original_path": file_path,
+                "migration_path": migration_file_path
+            })
+            
             if (i + 1) % 10 == 0:
-                print(f"   Backed up {i + 1}/{len(files_data)} files...")
+                print(f"   Processed {i + 1}/{len(files_data)} files...")
         
         # Create backup manifest
         manifest_path = os.path.join(backup_dir, "backup_manifest.json")
         with open(manifest_path, 'w', encoding='utf-8') as f:
             json.dump(backup_info, f, indent=2)
         
+        # Create migration workspace README
+        readme_path = os.path.join(migration_workspace, "MIGRATION_README.md")
+        with open(readme_path, 'w', encoding='utf-8') as f:
+            f.write(self._create_migration_readme(project_name, timestamp))
+        
         print(f"✅ Backup completed: {backup_dir}")
+        print(f"✅ Migration workspace created: {migration_workspace}")
         return backup_info
+    
+    def _create_migration_readme(self, project_name, timestamp):
+        """Create a README for the migration workspace."""
+        return f"""# Spring Migration Workspace - {project_name}
+
+**Created:** {timestamp}
+**Purpose:** Spring 5 → Spring 6 Migration
+
+## Directory Structure
+
+This directory contains the source files from your project with preserved directory structure, ready for git operations.
+
+## Git Workflow
+
+### 1. Initialize git repository (if not already)
+```bash
+cd {project_name}_migration_{timestamp}
+git init
+git add .
+git commit -m "Initial commit - Pre-migration source code"
+```
+
+### 2. Apply migration changes
+After running the migration tool, you'll have modified files in this directory.
+
+### 3. Review changes
+```bash
+git diff                    # See all changes
+git status                  # See modified files
+git diff src/main/java/     # See specific directory changes
+```
+
+### 4. Commit changes
+```bash
+git add .
+git commit -m "Spring 5 to 6 migration - Automated changes
+
+- Updated javax.* to jakarta.* imports
+- Migrated Spring Security configuration
+- Updated dependency versions
+- Fixed deprecated API usage
+"
+```
+
+### 5. Create branch (recommended)
+```bash
+git checkout -b spring-6-migration
+git commit -m "Spring 6 migration changes"
+```
+
+## Files Included
+
+This workspace contains all source files from your original project with the same directory structure, allowing you to:
+
+1. Track changes with git
+2. Review modifications line by line
+3. Selectively apply changes
+4. Create commits with proper change history
+5. Merge back to your main project
+
+## Safety Notes
+
+- Original files are backed up separately in the backup directory
+- This workspace is a copy - your original project is unchanged
+- Use git to track and manage migration changes
+- Test thoroughly before applying to your main project
+"""
     
     def post(self, shared, prep_res, exec_res):
         shared["backup_info"] = exec_res
+        return "default"
+
+
+class GitMigrationManager(Node):
+    """
+    Manages git operations for migration changes with proper workflow.
+    """
+    
+    def prep(self, shared):
+        backup_info = shared.get("backup_info", {})
+        applied_changes = shared.get("applied_changes", {})
+        project_name = shared["project_name"]
+        
+        return backup_info, applied_changes, project_name
+    
+    def exec(self, prep_res):
+        import os
+        import subprocess
+        from datetime import datetime
+        
+        backup_info, applied_changes, project_name = prep_res
+        migration_workspace = backup_info.get("migration_workspace")
+        
+        if not migration_workspace or not os.path.exists(migration_workspace):
+            print("❌ Migration workspace not found - skipping git operations")
+            return {"status": "skipped", "reason": "No migration workspace"}
+        
+        print(f"🔧 Setting up git workflow in migration workspace...")
+        
+        # Change to migration workspace
+        original_cwd = os.getcwd()
+        os.chdir(migration_workspace)
+        
+        try:
+            git_info = {
+                "workspace_path": migration_workspace,
+                "operations": [],
+                "branch_name": None,
+                "commit_hash": None
+            }
+            
+            # Initialize git if not exists
+            if not os.path.exists(".git"):
+                result = subprocess.run(["git", "init"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    git_info["operations"].append("✅ Git repository initialized")
+                    print("   Git repository initialized")
+                else:
+                    print(f"   Warning: Git init failed: {result.stderr}")
+            
+            # Configure git user if not set (for CI environments)
+            self._ensure_git_config()
+            
+            # Add all files and create initial commit
+            subprocess.run(["git", "add", "."], capture_output=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            initial_commit_msg = f"Initial commit - {project_name} pre-migration source"
+            
+            result = subprocess.run(
+                ["git", "commit", "-m", initial_commit_msg], 
+                capture_output=True, text=True
+            )
+            
+            if result.returncode == 0:
+                git_info["operations"].append("✅ Initial commit created")
+                print("   Initial commit created")
+                
+                # Get commit hash
+                commit_result = subprocess.run(
+                    ["git", "rev-parse", "HEAD"], 
+                    capture_output=True, text=True
+                )
+                if commit_result.returncode == 0:
+                    git_info["commit_hash"] = commit_result.stdout.strip()
+            
+            # Create migration branch
+            branch_name = f"spring-6-migration-{timestamp}"
+            result = subprocess.run(
+                ["git", "checkout", "-b", branch_name], 
+                capture_output=True, text=True
+            )
+            
+            if result.returncode == 0:
+                git_info["branch_name"] = branch_name
+                git_info["operations"].append(f"✅ Created branch: {branch_name}")
+                print(f"   Created migration branch: {branch_name}")
+            
+            # Create git workflow script
+            self._create_git_workflow_script(migration_workspace, project_name, applied_changes)
+            
+            return git_info
+            
+        except Exception as e:
+            print(f"   Error setting up git: {e}")
+            return {"status": "error", "error": str(e)}
+        
+        finally:
+            # Return to original directory
+            os.chdir(original_cwd)
+    
+    def _ensure_git_config(self):
+        """Ensure git user is configured for commits."""
+        import subprocess
+        
+        # Check if user.name is set
+        result = subprocess.run(
+            ["git", "config", "user.name"], 
+            capture_output=True, text=True
+        )
+        
+        if result.returncode != 0:
+            # Set default user for migration commits
+            subprocess.run(
+                ["git", "config", "user.name", "Spring Migration Tool"], 
+                capture_output=True
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "migration-tool@localhost"], 
+                capture_output=True
+            )
+            print("   Configured git user for migration commits")
+    
+    def _create_git_workflow_script(self, workspace, project_name, applied_changes):
+        """Create a script to help with the git workflow."""
+        script_content = f"""#!/bin/bash
+# Git Workflow Script for {project_name} Spring Migration
+
+echo "🔄 Spring Migration Git Workflow"
+echo "================================="
+echo ""
+
+# Show current status
+echo "📊 Current Git Status:"
+git status --short
+echo ""
+
+# Show change summary
+echo "📈 Change Summary:"
+echo "  Modified files: $(git diff --name-only --cached | wc -l)"
+echo "  Total changes: $(git diff --cached --stat | tail -1)"
+echo ""
+
+# Offer common operations
+echo "🔧 Available Operations:"
+echo "  1. Review all changes:     git diff --cached"
+echo "  2. Review specific file:   git diff --cached <filename>"
+echo "  3. Unstage changes:       git reset HEAD <filename>"
+echo "  4. Commit changes:        git commit -m 'Spring 6 migration changes'"
+echo "  5. Create patch:          git diff --cached > migration.patch"
+echo "  6. Show branch info:      git branch -v"
+echo ""
+
+# Interactive options
+read -p "🤔 What would you like to do? [review/commit/status/help]: " action
+
+case $action in
+    "review"|"r")
+        echo "📖 Reviewing changes..."
+        git diff --cached --name-status
+        echo ""
+        read -p "See detailed diff? [y/N]: " show_diff
+        if [[ $show_diff =~ ^[Yy]$ ]]; then
+            git diff --cached
+        fi
+        ;;
+    "commit"|"c")
+        echo "💾 Committing changes..."
+        git commit -m "Spring 5 to 6 migration - Automated changes
+
+✅ Migration completed for {project_name}
+📊 Changes applied: $(git diff --cached --stat | tail -1)
+
+Changes include:
+- javax.* → jakarta.* namespace migration
+- Spring Security configuration updates  
+- Dependency version updates
+- Deprecated API replacements
+
+Generated by Spring Migration Tool"
+        echo "✅ Changes committed!"
+        ;;
+    "status"|"s")
+        git status
+        git log --oneline -5
+        ;;
+    "help"|"h")
+        echo ""
+        echo "📚 Git Migration Help:"
+        echo "======================"
+        echo ""
+        echo "Common Commands:"
+        echo "  git diff --cached              # Review all staged changes"
+        echo "  git diff --cached <file>       # Review specific file"
+        echo "  git status                     # See current status"
+        echo "  git commit -m 'message'        # Commit changes"
+        echo "  git reset HEAD <file>          # Unstage specific file"
+        echo "  git reset HEAD                 # Unstage all changes"
+        echo ""
+        echo "Migration Workflow:"
+        echo "  1. Review changes with 'git diff --cached'"
+        echo "  2. Test the changes in your development environment"
+        echo "  3. Commit with 'git commit -m \"Spring 6 migration\"'"
+        echo "  4. Copy changes back to your main project"
+        echo ""
+        ;;
+    *)
+        echo "ℹ️  Run this script again or use git commands directly"
+        ;;
+esac
+"""
+        
+        script_path = os.path.join(workspace, "git-migration-workflow.sh")
+        with open(script_path, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+        
+        # Make script executable
+        import stat
+        os.chmod(script_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
+        
+        print(f"   Created git workflow script: git-migration-workflow.sh")
+    
+    def post(self, shared, prep_res, exec_res):
+        shared["git_info"] = exec_res
         return "default"
 
 
@@ -1543,6 +2067,7 @@ class MigrationChangeGenerator(Node):
         # Prepare file content for LLM (limit size and clean it)
         clean_content = self._prepare_file_content_for_llm(content, file_path)
         
+        # Enhanced prompt with better JSON guidance
         prompt = f"""# Spring Migration Change Analysis
 
 You are analyzing a file from project `{project_name}` for Spring 6 migration. Based on the overall migration analysis and the specific file content, generate precise, actionable changes.
@@ -1558,105 +2083,77 @@ You are analyzing a file from project `{project_name}` for Spring 6 migration. B
 {clean_content}
 ```
 
-## Your Task:
-Analyze this specific file and identify changes needed for Spring 6 migration based on what you actually find in the file content. For each change, determine:
+## CRITICAL: You MUST respond with ONLY valid JSON - no additional text or explanations
 
-1. **Change Type** (javax_to_jakarta, spring_security_updates, dependency_updates, configuration_updates, other_changes)
-2. **Safety Level** (automatic vs manual_review_required)
-3. **Specific transformation details**
+Your response must be ONLY a JSON object with this exact structure. Do not include any text before or after the JSON:
 
-## Analysis Guidelines:
-- Only suggest changes that are actually needed based on the file content
-- Base recommendations on actual imports, annotations, and code patterns found
-- Do not make assumptions about what might need to be changed
-- If no changes are needed, return empty arrays
-- Be specific about line numbers and exact transformations needed
+{{
+  "javax_to_jakarta": [],
+  "spring_security_updates": [],
+  "dependency_updates": [],
+  "configuration_updates": [],
+  "other_changes": []
+}}
 
-## IMPORTANT JSON Output Rules:
-- Return ONLY valid JSON, no additional text
-- Escape all special characters in strings (quotes, backslashes, etc.)
-- Keep descriptions short and simple
-- Avoid including raw file content in JSON strings
-- Use simple English descriptions
+For each category, include objects like:
+{{
+  "file": "{file_path}",
+  "type": "import_replacement",
+  "from": "javax.package.name",
+  "to": "jakarta.package.name",
+  "description": "Short description",
+  "line_numbers": [1, 2, 3],
+  "automatic": true,
+  "explanation": "Brief reason"
+}}
 
-## Output Format:
-Return ONLY a JSON object with this exact structure:
+## JSON Response Rules:
+1. Return ONLY the JSON object - no markdown, no explanation text
+2. Keep all string values short and simple
+3. Use only basic ASCII characters in strings
+4. If no changes needed in a category, use empty array: []
+5. Base recommendations only on what you find in the file content
+6. Include exact line numbers where possible
+7. Use "automatic": true only for simple import replacements
+8. Escape any quotes in string values
 
-```json
+## Example Response Format:
 {{
   "javax_to_jakarta": [
     {{
       "file": "{file_path}",
       "type": "import_replacement",
-      "from": "actual_javax_package_found",
-      "to": "corresponding_jakarta_package", 
-      "description": "Replace specific javax import found in file",
-      "line_numbers": [actual_line_numbers],
+      "from": "javax.persistence.Entity",
+      "to": "jakarta.persistence.Entity",
+      "description": "Replace javax persistence import",
+      "line_numbers": [3],
       "automatic": true,
-      "explanation": "Specific reason based on file analysis"
+      "explanation": "Standard javax to jakarta migration"
     }}
   ],
-  "spring_security_updates": [
-    {{
-      "file": "{file_path}",
-      "type": "security_config_update",
-      "description": "Specific security update needed based on file content",
-      "line_numbers": [actual_line_numbers],
-      "automatic": false,
-      "explanation": "Specific reason based on actual security config found"
-    }}
-  ],
-  "dependency_updates": [
-    {{
-      "file": "{file_path}",
-      "type": "dependency_version_update",
-      "description": "Specific dependency update needed based on file content",
-      "line_numbers": [actual_line_numbers],
-      "automatic": false,
-      "explanation": "Specific reason based on actual dependencies found"
-    }}
-  ],
-  "configuration_updates": [
-    {{
-      "file": "{file_path}",
-      "type": "config_property_update",
-      "description": "Specific configuration update needed based on file content",
-      "line_numbers": [actual_line_numbers],
-      "automatic": true,
-      "explanation": "Specific reason based on actual config found"
-    }}
-  ],
-  "other_changes": [
-    {{
-      "file": "{file_path}",
-      "type": "other_spring_update",
-      "description": "Other specific change needed based on file content",
-      "line_numbers": [actual_line_numbers],
-      "automatic": false,
-      "explanation": "Specific reason based on file analysis"
-    }}
-  ]
+  "spring_security_updates": [],
+  "dependency_updates": [],
+  "configuration_updates": [],
+  "other_changes": []
 }}
-```
 
-## Guidelines:
-- **Be specific**: Include exact line numbers, package names based on actual file content
-- **Be conservative**: Mark complex changes as `automatic: false`
-- **Be accurate**: Only suggest changes that are actually needed for this specific file
-- **Empty arrays**: If no changes needed in a category, return empty array `[]`
-- **Line numbers**: Count from 1, include affected lines based on actual file content
-- **Simple strings**: Keep all string values simple and short
-- **No raw content**: Never include raw file content in JSON responses
-
-Analyze the file content and return ONLY the JSON based on what you actually find (no additional text):"""
+Analyze the file and return ONLY the JSON object:"""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
             
+            # Enhanced debugging
+            if len(response) < 50:
+                print(f"     Warning: Very short LLM response for {file_path}: {len(response)} chars")
+                print(f"     Response: {response}")
+                return self._get_empty_changes()
+            
             # Clean and extract JSON from response
             json_str = self._extract_and_clean_json(response, file_path)
             if not json_str:
-                print(f"     No valid JSON found in LLM response for {file_path}")
+                print(f"     Failed to extract JSON from LLM response for {file_path}")
+                # In debug mode, save the response for inspection
+                self._save_debug_response(file_path, response)
                 return self._get_empty_changes()
             
             # Parse JSON
@@ -1676,14 +2173,41 @@ Analyze the file content and return ONLY the JSON based on what you actually fin
                         validated_changes.append(change)
                 file_changes[category] = validated_changes
             
+            # Report success with some statistics
+            total_changes = sum(len(changes) for changes in file_changes.values())
+            if total_changes > 0:
+                print(f"     ✅ Found {total_changes} changes for {file_path}")
+            
             return file_changes
             
         except json.JSONDecodeError as e:
             print(f"     JSON parsing error for {file_path}: {e}")
+            self._save_debug_response(file_path, response if 'response' in locals() else "No response")
             return self._get_empty_changes()
         except Exception as e:
             print(f"     Error analyzing {file_path}: {e}")
             return self._get_empty_changes()
+    
+    def _save_debug_response(self, file_path, response):
+        """Save problematic LLM responses for debugging."""
+        try:
+            import os
+            debug_dir = "./debug_responses"
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            # Clean filename for filesystem
+            safe_filename = file_path.replace("/", "_").replace("\\", "_").replace(".", "_")
+            debug_file = os.path.join(debug_dir, f"{safe_filename}_response.txt")
+            
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(f"File: {file_path}\n")
+                f.write(f"Response Length: {len(response)}\n")
+                f.write("="*50 + "\n")
+                f.write(response)
+            
+            print(f"     💾 Debug response saved to: {debug_file}")
+        except Exception as e:
+            print(f"     Warning: Could not save debug response: {e}")
     
     def _should_skip_file(self, file_path):
         """Check if file should be skipped for migration analysis."""
@@ -1759,1601 +2283,237 @@ Analyze the file content and return ONLY the JSON based on what you actually fin
         return content
     
     def _extract_and_clean_json(self, response, file_path):
-        """Extract and clean JSON from LLM response."""
+        """Extract and clean JSON from LLM response with enhanced error handling."""
         try:
             # Clean the response
             response = response.strip()
             
-            # Try to find JSON block in response
+            if not response:
+                print(f"     Empty response from LLM for {file_path}")
+                return None
+            
+            json_str = None
+            
+            # Method 1: Try to find JSON block in markdown format
             if "```json" in response:
                 json_str = response.split("```json")[1].split("```")[0].strip()
+                if json_str:
+                    print(f"     Found JSON in markdown block for {file_path}")
+                
+            # Method 2: Check if entire response is JSON
             elif response.startswith("{") and response.endswith("}"):
-                # Assume entire response is JSON
                 json_str = response
+                print(f"     Using entire response as JSON for {file_path}")
+                
+            # Method 3: Try to find JSON-like content with regex
             else:
-                # Try to find JSON-like content
                 import re
-                json_match = re.search(r'\{.*\}', response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    return None
+                # Look for JSON objects that might have text before/after
+                json_patterns = [
+                    r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',  # Simple nested JSON
+                    r'\{(?:[^{}]|\\.|\"[^\"]*\")*\}',     # JSON with escaped quotes
+                    r'\{.*?\}(?=\s*(?:\n|$))',           # JSON ending at line boundary
+                    r'\{.*?\}(?=\s*[^\w])',              # JSON followed by non-word chars
+                ]
+                
+                for pattern in json_patterns:
+                    json_match = re.search(pattern, response, re.DOTALL)
+                    if json_match:
+                        potential_json = json_match.group(0)
+                        # Quick validation - try to count braces
+                        if potential_json.count('{') == potential_json.count('}'):
+                            json_str = potential_json
+                            print(f"     Found JSON with pattern match for {file_path}")
+                            break
+                
+            if not json_str:
+                print(f"     No JSON structure found in response for {file_path}")
+                print(f"     Response preview: {response[:200]}...")
+                return None
             
             # Clean up JSON string
             json_str = json_str.strip()
             
-            # Remove any trailing incomplete content
+            # Remove any trailing incomplete content (commas, etc.)
             json_str = json_str.rstrip(',\n\r\t ')
             
-            # Basic bracket/brace balancing
-            open_braces = json_str.count('{')
-            close_braces = json_str.count('}')
-            if open_braces > close_braces:
-                json_str += '}' * (open_braces - close_braces)
+            # Advanced JSON cleaning
+            json_str = self._advanced_json_cleaning(json_str, file_path)
             
-            open_brackets = json_str.count('[')
-            close_brackets = json_str.count(']')
-            if open_brackets > close_brackets:
-                json_str += ']' * (open_brackets - close_brackets)
+            if not json_str:
+                print(f"     JSON cleaning failed for {file_path}")
+                return None
             
             # Test parse to validate
-            json.loads(json_str)
-            return json_str
-            
-        except Exception as e:
-            print(f"     JSON extraction/cleaning failed for {file_path}: {e}")
-            return None
-    
-    def _create_analysis_context(self, analysis):
-        """Create a concise context from the migration analysis for the LLM."""
-        context = "Key Migration Issues Identified:\n"
-        
-        # Defensive checks - ensure analysis is a dictionary
-        if not isinstance(analysis, dict):
-            return "Migration analysis not available - performing basic Spring 5->6 migration analysis.\n"
-        
-        # Extract key findings from analysis - use safe access
-        executive_summary = analysis.get("executive_summary", {})
-        if isinstance(executive_summary, dict):
-            migration_impact = executive_summary.get("migration_impact", "Unknown")
-            context += f"- Migration Impact: {migration_impact}\n"
-            
-            key_blockers = executive_summary.get("key_blockers", [])
-            if isinstance(key_blockers, list) and key_blockers:
-                context += "- Key Blockers:\n"
-                for blocker in key_blockers[:3]:  # Top 3 blockers
-                    if isinstance(blocker, str):
-                        context += f"  * {blocker}\n"
-        
-        # Add specific areas of concern - use safe access  
-        detailed_analysis = analysis.get("detailed_analysis", {})
-        if isinstance(detailed_analysis, dict):
-            
-            jakarta_migration = detailed_analysis.get("jakarta_migration", {})
-            if isinstance(jakarta_migration, dict) and jakarta_migration.get("javax_usages"):
-                context += "- javax.* packages detected - need jakarta.* migration\n"
-            
-            security_migration = detailed_analysis.get("security_migration", {})
-            if isinstance(security_migration, dict) and security_migration.get("websecurity_adapter_usage"):
-                context += "- WebSecurityConfigurerAdapter usage detected - needs SecurityFilterChain migration\n"
-            
-            build_tooling = detailed_analysis.get("build_tooling", {})
-            if isinstance(build_tooling, dict) and build_tooling.get("build_file_issues"):
-                context += "- Build configuration issues detected\n"
-        
-        # If we have minimal context, add a generic message
-        if context == "Key Migration Issues Identified:\n":
-            context += "- Standard Spring 5 to 6 migration analysis\n"
-            context += "- Checking for javax to jakarta namespace changes\n"
-            context += "- Reviewing Spring Security configuration updates\n"
-        
-        return context
-    
-    def _is_text_file(self, file_path, content):
-        """Check if file is a text file suitable for analysis."""
-        # Check by extension
-        text_extensions = {'.java', '.xml', '.properties', '.yml', '.yaml', '.gradle', '.sql', '.jsp', '.jspx', '.tag', '.tagx'}
-        if any(file_path.endswith(ext) for ext in text_extensions):
-            return True
-        
-        # Check for binary content
-        try:
-            # Try to encode as UTF-8
-            content.encode('utf-8')
-            # Check for null bytes (common in binary files)
-            if '\x00' in content:
-                return False
-            return True
-        except UnicodeEncodeError:
-            return False
-    
-    def _validate_change(self, change, file_path):
-        """Validate that a change has the required fields."""
-        required_fields = ["file", "type", "description"]
-        
-        for field in required_fields:
-            if field not in change:
-                print(f"     Warning: Missing field '{field}' in change for {file_path}")
-                return False
-        
-        # Ensure file path matches
-        if change["file"] != file_path:
-            change["file"] = file_path  # Correct it
-        
-        return True
-    
-    def _get_empty_changes(self):
-        """Return empty changes structure."""
-        return {
-            "javax_to_jakarta": [],
-            "spring_security_updates": [],
-            "dependency_updates": [],
-            "configuration_updates": [],
-            "other_changes": []
-        }
-    
-    def _analyze_file_for_changes(self, file_path, content, analysis, use_cache):
-        """Legacy method - now redirects to LLM analysis."""
-        return self._analyze_file_with_llm(file_path, content, analysis, "project", use_cache)
-    
-    def post(self, shared, prep_res, exec_res):
-        shared["migration_changes"] = exec_res
-        
-        # Count total changes
-        total_changes = sum(len(changes) for changes in exec_res.values())
-        print(f"✅ Generated {total_changes} specific migration changes using LLM analysis")
-        
-        return "default"
-
-
-class ChangeConfirmationNode(Node):
-    """
-    Shows users what changes will be made and asks for confirmation.
-    """
-    
-    def prep(self, shared):
-        changes = shared["migration_changes"]
-        return changes
-    
-    def exec(self, prep_res):
-        changes = prep_res
-        
-        print("\n" + "="*80)
-        print("🔍 SPRING MIGRATION CHANGES PREVIEW")
-        print("="*80)
-        
-        total_changes = sum(len(change_list) for change_list in changes.values())
-        
-        if total_changes == 0:
-            print("No automatic changes identified. Manual review may still be needed.")
-            return {"approved": False, "reason": "no_changes"}
-        
-        print(f"\nFound {total_changes} changes across {len([k for k, v in changes.items() if v])} categories:\n")
-        
-        # Display changes by category
-        for category, change_list in changes.items():
-            if change_list:
-                category_display = category.replace("_", " ").title()
-                print(f"📂 {category_display} ({len(change_list)} changes):")
-                
-                for i, change in enumerate(change_list[:5]):  # Show first 5 changes
-                    print(f"   {i+1}. {change['file']}: {change['description']}")
-                
-                if len(change_list) > 5:
-                    print(f"   ... and {len(change_list) - 5} more changes")
-                print()
-        
-        # Ask for user confirmation
-        print("⚠️  IMPORTANT: This will modify your source files!")
-        print("   - A backup has been created automatically")
-        print("   - Changes can be reviewed and undone if needed")
-        print("   - Some changes may require manual review")
-        
-        while True:
-            user_input = input("\n🤔 Apply these migration changes? [y/N/preview]: ").strip().lower()
-            
-            if user_input in ['y', 'yes']:
-                return {"approved": True, "changes": changes}
-            elif user_input in ['n', 'no', '']:
-                return {"approved": False, "reason": "user_declined"}
-            elif user_input in ['p', 'preview']:
-                self._show_detailed_preview(changes)
-                continue
-            else:
-                print("Please enter 'y' for yes, 'n' for no, or 'preview' to see details")
-    
-    def _show_detailed_preview(self, changes):
-        """Show detailed preview of changes"""
-        print("\n" + "-"*60)
-        print("DETAILED CHANGE PREVIEW")
-        print("-"*60)
-        
-        for category, change_list in changes.items():
-            if change_list:
-                category_display = category.replace("_", " ").title()
-                print(f"\n📂 {category_display}:")
-                
-                for change in change_list:
-                    print(f"   File: {change['file']}")
-                    print(f"   Type: {change['type']}")
-                    print(f"   Description: {change['description']}")
-                    
-                    if 'from' in change and 'to' in change:
-                        print(f"   Change: {change['from']} → {change['to']}")
-                    
-                    if change.get('requires_manual_review'):
-                        print("   ⚠️  Manual review required")
-                    
-                    print()
-        
-        print("-"*60)
-    
-    def post(self, shared, prep_res, exec_res):
-        shared["change_approval"] = exec_res
-        
-        if exec_res["approved"]:
-            print("✅ Changes approved by user")
-            return "apply_changes"
-        else:
-            print("❌ Changes not approved - skipping application")
-            return "skip_changes"
-
-
-class MigrationChangeApplicator(Node):
-    """
-    Applies the approved migration changes to files.
-    """
-    
-    def prep(self, shared):
-        changes = shared["migration_changes"]
-        approval = shared["change_approval"]
-        
-        if not approval["approved"]:
-            return None
-        
-        # Only proceed if we have a local directory (not GitHub repo)
-        local_dir = shared.get("local_dir")
-        if not local_dir:
-            print("⚠️  Cannot apply changes to GitHub repository. Changes can only be applied to local directories.")
-            return None
-        
-        return changes, local_dir
-    
-    def exec(self, prep_res):
-        if prep_res is None:
-            return {"applied": False, "reason": "not_approved_or_not_local"}
-        
-        changes, local_dir = prep_res
-        
-        print(f"🔧 Applying migration changes to {local_dir}...")
-        
-        applied_changes = {
-            "successful": [],
-            "failed": [],
-            "skipped": []
-        }
-        
-        # Apply javax to jakarta changes (automatic)
-        for change in changes.get("javax_to_jakarta", []):
-            if change.get("automatic", True):  # Default to automatic for javax→jakarta
-                try:
-                    result = self._apply_import_replacement(change, local_dir)
-                    if result:
-                        applied_changes["successful"].append(change)
-                    else:
-                        applied_changes["skipped"].append(change)
-                except Exception as e:
-                    change["error"] = str(e)
-                    applied_changes["failed"].append(change)
-            else:
-                applied_changes["skipped"].append({**change, "reason": "requires_manual_review"})
-        
-        # Apply configuration updates (if marked as automatic)
-        for change in changes.get("configuration_updates", []):
-            if change.get("automatic", False) and not change.get("requires_manual_review", True):
-                try:
-                    result = self._apply_configuration_update(change, local_dir)
-                    if result:
-                        applied_changes["successful"].append(change)
-                    else:
-                        applied_changes["skipped"].append(change)
-                except Exception as e:
-                    change["error"] = str(e)
-                    applied_changes["failed"].append(change)
-            else:
-                applied_changes["skipped"].append({**change, "reason": "requires_manual_review"})
-        
-        # Skip complex changes that require manual review
-        manual_review_categories = ["spring_security_updates", "dependency_updates", "other_changes"]
-        for category in manual_review_categories:
-            for change in changes.get(category, []):
-                applied_changes["skipped"].append({**change, "reason": "requires_manual_review"})
-        
-        return applied_changes
-    
-    def _apply_import_replacement(self, change, local_dir):
-        """Apply javax to jakarta import replacements using enhanced change info."""
-        import os
-        
-        file_path = os.path.join(local_dir, change["file"])
-        
-        if not os.path.exists(file_path):
-            print(f"   ⚠️  File not found: {file_path}")
-            return False
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            original_content = content
-            
-            # Get change details
-            from_package = change.get("from", "")
-            to_package = change.get("to", "")
-            
-            if not from_package or not to_package:
-                print(f"   ⚠️  Missing from/to packages in change: {change}")
-                return False
-            
-            changes_made = 0
-            
-            # Replace import statements
-            import_pattern = f"import {from_package}"
-            if import_pattern in content:
-                content = content.replace(import_pattern, f"import {to_package}")
-                changes_made += 1
-            
-            # Replace static imports
-            static_import_pattern = f"import static {from_package}"
-            if static_import_pattern in content:
-                content = content.replace(static_import_pattern, f"import static {to_package}")
-                changes_made += 1
-            
-            # Replace fully qualified class names (more conservative)
-            # Only replace if it's clearly a package reference (followed by a dot and capital letter)
-            import re
-            qualified_pattern = re.compile(rf'\b{re.escape(from_package)}\.([A-Z][a-zA-Z0-9_]*)', re.MULTILINE)
-            matches = qualified_pattern.findall(content)
-            if matches:
-                content = qualified_pattern.sub(rf'{to_package}.\1', content)
-                changes_made += len(matches)
-            
-            if content != original_content and changes_made > 0:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
-                print(f"   ✅ Applied: {change['file']} - {from_package} → {to_package} ({changes_made} changes)")
-                return True
-            else:
-                print(f"   ℹ️  No changes needed: {change['file']} - {from_package}")
-                return False
-                
-        except Exception as e:
-            print(f"   ❌ Failed to apply change to {change['file']}: {e}")
-            raise e
-    
-    def _apply_configuration_update(self, change, local_dir):
-        """Apply configuration property updates."""
-        import os
-        
-        file_path = os.path.join(local_dir, change["file"])
-        
-        if not os.path.exists(file_path):
-            print(f"   ⚠️  File not found: {file_path}")
-            return False
-        
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            original_content = content
-            
-            # Get property change details
-            from_property = change.get("from_property", "")
-            to_property = change.get("to_property", "")
-            
-            if not from_property or not to_property:
-                print(f"   ⚠️  Missing from_property/to_property in change: {change}")
-                return False
-            
-            # Handle different file types
-            if file_path.endswith(('.properties', '.yml', '.yaml')):
-                if file_path.endswith('.properties'):
-                    # Properties file format: key=value
-                    if f"{from_property}=" in content:
-                        content = content.replace(f"{from_property}=", f"{to_property}=")
-                else:
-                    # YAML format: key: value
-                    if f"{from_property}:" in content:
-                        content = content.replace(f"{from_property}:", f"{to_property}:")
-                
-                if content != original_content:
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    print(f"   ✅ Applied: {change['file']} - {from_property} → {to_property}")
-                    return True
-                else:
-                    print(f"   ℹ️  Property not found: {change['file']} - {from_property}")
-                    return False
-            else:
-                print(f"   ⚠️  Unsupported file type for configuration update: {file_path}")
-                return False
-                
-        except Exception as e:
-            print(f"   ❌ Failed to apply configuration change to {change['file']}: {e}")
-            raise e
-    
-    def _apply_dependency_update(self, change, local_dir):
-        """Apply dependency updates to build files."""
-        # This is intentionally conservative - dependency updates should be manual
-        print(f"   ⚠️  Dependency update marked for manual review: {change['file']}")
-        return False
-    
-    def post(self, shared, prep_res, exec_res):
-        if prep_res is None:
-            print("⏭️  Change application skipped")
-            return "default"
-        
-        shared["applied_changes"] = exec_res
-        
-        successful = len(exec_res["successful"])
-        failed = len(exec_res["failed"])  
-        skipped = len(exec_res["skipped"])
-        
-        print(f"\n📊 Change Application Summary:")
-        print(f"   ✅ Successfully applied: {successful}")
-        print(f"   ⏭️  Skipped (manual review): {skipped}")
-        print(f"   ❌ Failed: {failed}")
-        
-        if successful > 0:
-            print(f"\n✅ Successfully applied changes:")
-            for change in exec_res["successful"]:
-                print(f"   - {change['file']}: {change['description']}")
-        
-        if failed > 0:
-            print(f"\n❌ Failed changes:")
-            for change in exec_res["failed"]:
-                print(f"   - {change['file']}: {change.get('error', 'Unknown error')}")
-        
-        return "default"
-
-
-class MigrationReportGenerator(Node):
-    """
-    Enhanced report generator with performance metrics.
-    """
-    
-    def prep(self, shared):
-        analysis = shared["migration_analysis"]
-        plan = shared["migration_plan"]
-        dependency_compatibility = shared.get("dependency_compatibility", {})
-        project_name = shared["project_name"]
-        output_dir = shared["output_dir"]
-        backup_info = shared.get("backup_info")
-        applied_changes = shared.get("applied_changes")
-        files_data = shared.get("files", [])  # Add files data for performance metrics
-        
-        return analysis, plan, dependency_compatibility, project_name, output_dir, backup_info, applied_changes, files_data
-    
-    def exec(self, prep_res):
-        monitor = get_performance_monitor()
-        monitor.start_operation("report_generation")
-        
-        analysis, plan, dependency_compatibility, project_name, output_dir, backup_info, applied_changes, files_data = prep_res
-        
-        # Create comprehensive report with performance metrics
-        report = {
-            "project_name": project_name,
-            "analysis_date": None,  # Will be set in post()
-            "migration_analysis": analysis,
-            "migration_plan": plan,
-            "dependency_compatibility": dependency_compatibility,
-            "backup_info": backup_info,
-            "applied_changes": applied_changes,
-            "performance_metrics": monitor.get_performance_summary(),
-            "recommendations": {
-                "immediate_actions": [],
-                "long_term_considerations": [],
-                "risk_mitigation": [],
-                "performance_optimizations": monitor.generate_optimization_recommendations(
-                    total_files=len(files_data),
-                    total_size_mb=sum(len(content) for _, content in files_data) / 1024 / 1024
-                )
-            }
-        }
-        
-        # Extract immediate actions from high-priority items
-        if "effort_estimation" in analysis and "priority_levels" in analysis.get("effort_estimation", {}):
-            report["recommendations"]["immediate_actions"] = analysis.get("effort_estimation", {}).get("priority_levels", {}).get("high", [])
-        
-        # Add change application summary
-        if applied_changes:
-            report["change_summary"] = {
-                "automatic_changes_applied": len(applied_changes.get("successful", [])),
-                "changes_requiring_manual_review": len(applied_changes.get("skipped", [])),
-                "failed_changes": len(applied_changes.get("failed", []))
-            }
-        
-        monitor.end_operation("report_generation", files_processed=1)
-        return report
-    
-    def post(self, shared, prep_res, exec_res):
-        import json
-        import os
-        from datetime import datetime
-        
-        monitor = get_performance_monitor()
-        
-        analysis, plan, dependency_compatibility, project_name, output_dir, backup_info, applied_changes, files_data = prep_res
-        report = exec_res
-        
-        # Add timestamp
-        report["analysis_date"] = datetime.now().isoformat()
-        
-        # Create output directory
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Save detailed JSON report
-        json_file = os.path.join(output_dir, f"{project_name}_spring_migration_report.json")
-        with open(json_file, 'w', encoding='utf-8') as f:
-            json.dump(report, f, indent=2, ensure_ascii=False)
-        
-        # Save performance report
-        performance_file = os.path.join(output_dir, f"{project_name}_performance_report.json")
-        monitor.save_performance_report(performance_file)
-        
-        # Save human-readable summary with performance info
-        summary_file = os.path.join(output_dir, f"{project_name}_migration_summary.md")
-        self._generate_enhanced_summary(summary_file, report, monitor)
-        
-        shared["final_output_dir"] = output_dir
-        
-        print(f"✅ Enhanced migration report saved to:")
-        print(f"   📄 Detailed report: {json_file}")
-        print(f"   📋 Summary: {summary_file}")
-        print(f"   📊 Performance: {performance_file}")
-        
-        if backup_info:
-            print(f"   📦 Backup: {backup_info['backup_dir']}")
-        
-        # Print performance summary
-        perf_summary = monitor.get_performance_summary()
-        print(f"\n⚡ Performance Summary:")
-        print(f"   Total Duration: {perf_summary['overall_duration']:.1f}s")
-        print(f"   Files Processed: {perf_summary['total_files_processed']}")
-        print(f"   LLM Calls: {perf_summary['total_llm_calls']}")
-        print(f"   Peak Memory: {perf_summary['peak_memory_mb']:.1f} MB")
-        
-        if perf_summary['optimization_recommendations']:
-            print(f"   💡 Optimizations available - see performance report")
-        
-        return "default"
-    
-    def _generate_enhanced_summary(self, summary_file, report, monitor):
-        """Generate enhanced summary with performance metrics."""
-        with open(summary_file, 'w', encoding='utf-8') as f:
-            f.write(f"# Spring 5 to 6 Migration Analysis & Implementation Report\n\n")
-            f.write(f"**Project:** {report['project_name']}\n")
-            f.write(f"**Analysis Date:** {report['analysis_date']}\n\n")
-            
-            # Performance Summary
-            perf_summary = report.get('performance_metrics', {})
-            if perf_summary:
-                f.write("## Performance Summary\n\n")
-                f.write(f"**Total Analysis Time:** {perf_summary.get('overall_duration', 0):.1f} seconds\n")
-                f.write(f"**Files Processed:** {perf_summary.get('total_files_processed', 0)}\n")
-                f.write(f"**LLM Calls Made:** {perf_summary.get('total_llm_calls', 0)}\n")
-                f.write(f"**Peak Memory Usage:** {perf_summary.get('peak_memory_mb', 0):.1f} MB\n")
-                f.write(f"**Processing Rate:** {perf_summary.get('files_per_second', 0):.1f} files/second\n\n")
-                
-                # Performance optimizations
-                optimizations = report['recommendations'].get('performance_optimizations', [])
-                if optimizations:
-                    f.write("### Performance Optimization Recommendations\n")
-                    for opt in optimizations:
-                        f.write(f"- {opt}\n")
-                    f.write("\n")
-            
-            # ... rest of existing summary generation ...
-
-
-class GitOperationsManager(Node):
-    """
-    Manages Git operations for migration changes - comparison, branching, and pushing.
-    """
-    
-    def prep(self, shared):
-        local_dir = shared.get("local_dir")
-        applied_changes = shared.get("applied_changes")
-        project_name = shared["project_name"]
-        git_integration = shared.get("git_integration", False)
-        
-        if not local_dir:
-            return None  # Skip Git operations for GitHub repos
-        
-        if not git_integration:
-            return None  # Skip Git operations if not enabled
-        
-        return local_dir, applied_changes, project_name
-    
-    def exec(self, prep_res):
-        if prep_res is None:
-            return {"skipped": True, "reason": "Not a local repository"}
-        
-        import os
-        import subprocess
-        from datetime import datetime
-        
-        local_dir, applied_changes, project_name = prep_res
-        
-        print(f"🔀 Managing Git operations for Spring migration...")
-        
-        # Check if directory is a Git repository
-        if not os.path.exists(os.path.join(local_dir, '.git')):
-            print(f"   ⚠️  Directory is not a Git repository: {local_dir}")
-            return {"skipped": True, "reason": "Not a Git repository"}
-        
-        # Change to the repository directory
-        original_cwd = os.getcwd()
-        os.chdir(local_dir)
-        
-        try:
-            git_operations = {
-                "repository_status": self._get_repository_status(),
-                "changes_summary": self._analyze_git_changes(),
-                "branch_info": self._get_branch_info(),
-                "commit_prepared": False,
-                "push_ready": False
-            }
-            
-            # Check if there are any changes to commit
-            if git_operations["changes_summary"]["has_changes"]:
-                # Create a migration branch
-                branch_name = self._create_migration_branch(project_name)
-                git_operations["migration_branch"] = branch_name
-                
-                # Stage the changes
-                self._stage_migration_changes()
-                git_operations["changes_staged"] = True
-                
-                # Show diff summary
-                git_operations["diff_summary"] = self._get_diff_summary()
-                
-                # Ask user if they want to commit and push
-                commit_decision = self._ask_commit_decision(git_operations)
-                
-                if commit_decision["commit"]:
-                    # Create commit
-                    commit_hash = self._create_migration_commit(applied_changes, project_name)
-                    git_operations["commit_hash"] = commit_hash
-                    git_operations["commit_prepared"] = True
-                    
-                    if commit_decision["push"]:
-                        # Push to remote
-                        push_result = self._push_migration_branch(branch_name)
-                        git_operations["push_result"] = push_result
-                        git_operations["push_ready"] = True
-                        
-                        # Generate pull request info
-                        git_operations["pull_request_info"] = self._generate_pr_info(project_name, applied_changes)
-            
-            return git_operations
-            
-        except Exception as e:
-            print(f"   ❌ Git operations failed: {e}")
-            return {"error": str(e), "skipped": True}
-        finally:
-            os.chdir(original_cwd)
-    
-    def _get_repository_status(self):
-        """Get current Git repository status."""
-        try:
-            import subprocess
-            
-            # Get current branch
-            current_branch = subprocess.check_output(
-                ["git", "branch", "--show-current"], 
-                text=True
-            ).strip()
-            
-            # Get repository remote info
             try:
-                remote_url = subprocess.check_output(
-                    ["git", "config", "--get", "remote.origin.url"],
-                    text=True
-                ).strip()
-            except:
-                remote_url = "No remote configured"
-            
-            # Check if working directory is clean
-            status_output = subprocess.check_output(
-                ["git", "status", "--porcelain"],
-                text=True
-            ).strip()
-            
-            return {
-                "current_branch": current_branch,
-                "remote_url": remote_url,
-                "is_clean": len(status_output) == 0,
-                "modified_files": len(status_output.split('\n')) if status_output else 0
-            }
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def _analyze_git_changes(self):
-        """Analyze what changes are present in the working directory."""
-        try:
-            import subprocess
-            
-            # Get status of all files
-            status_output = subprocess.check_output(
-                ["git", "status", "--porcelain"],
-                text=True
-            ).strip()
-            
-            if not status_output:
-                return {"has_changes": False, "summary": "No changes detected"}
-            
-            changes = {"modified": [], "added": [], "deleted": [], "untracked": []}
-            
-            for line in status_output.split('\n'):
-                if len(line) >= 3:
-                    status = line[:2]
-                    filename = line[3:]
-                    
-                    if status.startswith('M'):
-                        changes["modified"].append(filename)
-                    elif status.startswith('A'):
-                        changes["added"].append(filename)
-                    elif status.startswith('D'):
-                        changes["deleted"].append(filename)
-                    elif status.startswith('??'):
-                        changes["untracked"].append(filename)
-            
-            total_changes = sum(len(files) for files in changes.values())
-            
-            return {
-                "has_changes": True,
-                "total_changes": total_changes,
-                "changes": changes,
-                "summary": f"{total_changes} files changed"
-            }
+                test_parse = json.loads(json_str)
+                print(f"     Successfully parsed JSON for {file_path}")
+                return json_str
+            except json.JSONDecodeError as e:
+                print(f"     JSON validation failed for {file_path}: {e}")
+                
+                # Try to fix common JSON issues
+                fixed_json = self._attempt_json_repair(json_str, file_path)
+                if fixed_json:
+                    try:
+                        json.loads(fixed_json)
+                        print(f"     Successfully repaired JSON for {file_path}")
+                        return fixed_json
+                    except:
+                        pass
+                
+                print(f"     Could not repair JSON for {file_path}")
+                print(f"     JSON preview: {json_str[:200]}...")
+                return None
             
         except Exception as e:
-            return {"error": str(e), "has_changes": False}
-    
-    def _get_branch_info(self):
-        """Get information about Git branches."""
-        try:
-            import subprocess
-            
-            # List all branches
-            branches = subprocess.check_output(
-                ["git", "branch", "-a"],
-                text=True
-            ).strip().split('\n')
-            
-            return {
-                "all_branches": [b.strip().replace('*', '').strip() for b in branches],
-                "current_branch": subprocess.check_output(
-                    ["git", "branch", "--show-current"],
-                    text=True
-                ).strip()
-            }
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def _create_migration_branch(self, project_name):
-        """Create a new branch for migration changes."""
-        import subprocess
-        from datetime import datetime
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        branch_name = f"spring-migration-{timestamp}"
-        
-        try:
-            # Create and checkout new branch
-            subprocess.run(
-                ["git", "checkout", "-b", branch_name],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(f"   ✅ Created migration branch: {branch_name}")
-            return branch_name
-        except subprocess.CalledProcessError as e:
-            print(f"   ⚠️  Failed to create branch: {e}")
+            print(f"     JSON extraction error for {file_path}: {e}")
             return None
     
-    def _stage_migration_changes(self):
-        """Stage all migration-related changes."""
-        import subprocess
-        
+    def _advanced_json_cleaning(self, json_str, file_path):
+        """Advanced JSON cleaning with multiple repair strategies."""
         try:
-            # Add all changes (be careful - this adds everything)
-            subprocess.run(
-                ["git", "add", "."],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(f"   ✅ Staged all migration changes")
-            return True
-        except subprocess.CalledProcessError as e:
-            print(f"   ❌ Failed to stage changes: {e}")
-            return False
-    
-    def _get_diff_summary(self):
-        """Get a summary of the staged changes."""
-        import subprocess
-        
-        try:
-            # Get diff stats
-            diff_stats = subprocess.check_output(
-                ["git", "diff", "--cached", "--stat"],
-                text=True
-            ).strip()
+            # Remove common problematic patterns
+            import re
             
-            # Get number of changed files
-            diff_numstat = subprocess.check_output(
-                ["git", "diff", "--cached", "--numstat"],
-                text=True
-            ).strip()
-            
-            if not diff_numstat:
-                return {"summary": "No staged changes", "files_changed": 0}
-            
-            lines = diff_numstat.split('\n')
-            files_changed = len(lines)
-            
-            total_additions = 0
-            total_deletions = 0
+            # 1. Fix unescaped quotes in strings - much simpler approach
+            lines = json_str.split('\n')
+            cleaned_lines = []
             
             for line in lines:
-                parts = line.split('\t')
-                if len(parts) >= 2:
-                    try:
-                        additions = int(parts[0]) if parts[0] != '-' else 0
-                        deletions = int(parts[1]) if parts[1] != '-' else 0
-                        total_additions += additions
-                        total_deletions += deletions
-                    except ValueError:
-                        continue
-            
-            return {
-                "summary": diff_stats,
-                "files_changed": files_changed,
-                "additions": total_additions,
-                "deletions": total_deletions
-            }
-            
-        except Exception as e:
-            return {"error": str(e)}
-    
-    def _ask_commit_decision(self, git_operations):
-        """Ask user whether to commit and push changes."""
-        print("\n" + "="*60)
-        print("🔀 GIT OPERATIONS SUMMARY")
-        print("="*60)
-        
-        print(f"📊 Changes Summary:")
-        if git_operations["changes_summary"]["has_changes"]:
-            changes = git_operations["changes_summary"]["changes"]
-            print(f"   📝 Modified files: {len(changes.get('modified', []))}")
-            print(f"   ➕ Added files: {len(changes.get('added', []))}")
-            print(f"   ➖ Deleted files: {len(changes.get('deleted', []))}")
-            print(f"   ❓ Untracked files: {len(changes.get('untracked', []))}")
-        
-        if "diff_summary" in git_operations:
-            diff = git_operations["diff_summary"]
-            print(f"\n📈 Diff Summary:")
-            print(f"   Files changed: {diff.get('files_changed', 0)}")
-            print(f"   Lines added: +{diff.get('additions', 0)}")
-            print(f"   Lines deleted: -{diff.get('deletions', 0)}")
-        
-        print(f"\n🌿 Branch: {git_operations.get('migration_branch', 'unknown')}")
-        print(f"🏠 Repository: {git_operations['repository_status'].get('remote_url', 'unknown')}")
-        
-        # Ask for commit decision
-        print("\n" + "="*60)
-        while True:
-            commit_choice = input("💾 Commit these migration changes? [y/N]: ").strip().lower()
-            if commit_choice in ['y', 'yes']:
-                commit_decision = True
-                break
-            elif commit_choice in ['n', 'no', '']:
-                commit_decision = False
-                break
-            else:
-                print("Please enter 'y' for yes or 'n' for no")
-        
-        push_decision = False
-        if commit_decision:
-            while True:
-                push_choice = input("🚀 Push to remote repository? [y/N]: ").strip().lower()
-                if push_choice in ['y', 'yes']:
-                    push_decision = True
-                    break
-                elif push_choice in ['n', 'no', '']:
-                    push_decision = False
-                    break
-                else:
-                    print("Please enter 'y' for yes or 'n' for no")
-        
-        return {"commit": commit_decision, "push": push_decision}
-    
-    def _create_migration_commit(self, applied_changes, project_name):
-        """Create a commit with migration changes."""
-        import subprocess
-        from datetime import datetime
-        
-        # Generate commit message
-        successful_changes = len(applied_changes.get("successful", []))
-        skipped_changes = len(applied_changes.get("skipped", []))
-        
-        commit_message = f"""Spring 5 to 6 Migration - Automated Changes
-
-- Applied {successful_changes} automatic migration changes
-- {skipped_changes} changes marked for manual review
-- Jakarta namespace migration (javax.* → jakarta.*)
-- Updated import statements and references
-
-Generated by AI Codebase Migration Tool
-Project: {project_name}
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-        
-        try:
-            result = subprocess.run(
-                ["git", "commit", "-m", commit_message],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            
-            # Get commit hash
-            commit_hash = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                text=True
-            ).strip()
-            
-            print(f"   ✅ Created commit: {commit_hash[:8]}")
-            return commit_hash
-            
-        except subprocess.CalledProcessError as e:
-            print(f"   ❌ Failed to create commit: {e}")
-            return None
-    
-    def _push_migration_branch(self, branch_name):
-        """Push the migration branch to remote repository."""
-        import subprocess
-        
-        try:
-            # Push branch to origin
-            result = subprocess.run(
-                ["git", "push", "-u", "origin", branch_name],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            
-            print(f"   ✅ Pushed branch '{branch_name}' to remote")
-            return {"success": True, "branch": branch_name}
-            
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else str(e)
-            print(f"   ❌ Failed to push branch: {error_msg}")
-            return {"success": False, "error": error_msg}
-    
-    def _generate_pr_info(self, project_name, applied_changes):
-        """Generate pull request information."""
-        successful_changes = len(applied_changes.get("successful", []))
-        skipped_changes = len(applied_changes.get("skipped", []))
-        
-        pr_title = f"Spring 5 to 6 Migration - Automated Changes for {project_name}"
-        
-        pr_description = f"""## Spring Framework Migration
-
-This pull request contains automated migration changes from Spring 5 to Spring 6.
-
-### Changes Applied
-- ✅ **{successful_changes} automatic changes** applied successfully
-- ⚠️ **{skipped_changes} changes** require manual review
-
-### Migration Details
-- **Jakarta Namespace**: Updated `javax.*` imports to `jakarta.*`
-- **Import Updates**: Cleaned up package references
-- **Configuration**: Basic property updates where applicable
-
-### Manual Review Required
-The following changes were identified but require manual review:
-"""
-        
-        # Add details about skipped changes
-        for change in applied_changes.get("skipped", [])[:5]:  # Show first 5
-            reason = change.get("reason", "manual review required")
-            pr_description += f"- `{change['file']}`: {change['description']} ({reason})\n"
-        
-        if len(applied_changes.get("skipped", [])) > 5:
-            remaining = len(applied_changes.get("skipped", [])) - 5
-            pr_description += f"- ... and {remaining} more changes\n"
-        
-        pr_description += f"""
-### Testing
-- [ ] Application builds successfully
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Manual testing completed
-
-### Generated by
-🤖 AI Codebase Migration Tool
-"""
-        
-        return {
-            "title": pr_title,
-            "description": pr_description,
-            "labels": ["migration", "spring-6", "jakarta-ee", "automated"]
-        }
-    
-    def post(self, shared, prep_res, exec_res):
-        shared["git_operations"] = exec_res
-        
-        if exec_res.get("skipped"):
-            print("⏭️  Git operations skipped")
-            return "default"
-        
-        if exec_res.get("error"):
-            print(f"❌ Git operations failed: {exec_res['error']}")
-            return "default"
-        
-        # Print summary
-        print(f"\n📋 Git Operations Summary:")
-        if exec_res.get("migration_branch"):
-            print(f"   🌿 Created branch: {exec_res['migration_branch']}")
-        
-        if exec_res.get("commit_prepared"):
-            commit_hash = exec_res.get("commit_hash", "unknown")
-            print(f"   💾 Created commit: {commit_hash[:8] if commit_hash else 'unknown'}")
-        
-        if exec_res.get("push_ready"):
-            print(f"   🚀 Pushed to remote repository")
-            
-            # Show PR information
-            if "pull_request_info" in exec_res:
-                pr_info = exec_res["pull_request_info"]
-                print(f"\n📝 Ready for Pull Request:")
-                print(f"   Title: {pr_info['title']}")
-                print(f"   Branch: {exec_res.get('migration_branch')}")
-                print(f"   \n💡 Create a pull request on your Git platform with the generated title and description.")
-        
-        return "default"
-
-
-class DependencyCompatibilityAnalyzer(Node):
-    """
-    Enhanced dependency analyzer with concurrent processing capabilities.
-    """
-    
-    def prep(self, shared):
-        files_data = shared["files"]
-        project_name = shared["project_name"]
-        use_cache = shared.get("use_cache", True)
-        optimization_settings = shared.get("optimization_settings", {})
-        
-        # Extract build files for dependency analysis
-        build_files = self._extract_build_files(files_data)
-        dependency_info = self._parse_dependencies(build_files)
-        
-        return dependency_info, project_name, use_cache, optimization_settings
-    
-    def exec(self, prep_res):
-        monitor = get_performance_monitor()
-        monitor.start_operation("dependency_compatibility_analysis")
-        
-        dependency_info, project_name, use_cache, optimization_settings = prep_res
-        
-        print(f"🔍 Analyzing dependency compatibility with Spring 6...")
-        
-        # Check if we should use concurrent processing
-        enable_parallel = optimization_settings.get("enable_parallel_processing", False)
-        
-        if enable_parallel and len(dependency_info) > 2:
-            print("⚡ Using concurrent dependency analysis...")
-            compatibility_analysis = self._analyze_dependencies_concurrently(
-                dependency_info, project_name, use_cache
-            )
-        else:
-            compatibility_analysis = self._analyze_dependencies_sequentially(
-                dependency_info, project_name, use_cache
-            )
-        
-        # Perform cross-dependency analysis
-        compatibility_analysis["dependency_graph"] = self._analyze_dependency_relationships(dependency_info)
-        compatibility_analysis["version_conflicts"] = self._detect_version_conflicts(compatibility_analysis)
-        compatibility_analysis["migration_roadmap"] = self._generate_dependency_migration_roadmap(compatibility_analysis)
-        
-        monitor.end_operation("dependency_compatibility_analysis",
-                            files_processed=len(dependency_info),
-                            llm_calls=len(dependency_info))
-        
-        return compatibility_analysis
-    
-    def _analyze_dependencies_concurrently(self, dependency_info, project_name, use_cache):
-        """Analyze dependencies using concurrent processing."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import threading
-        
-        compatibility_analysis = {
-            "maven_dependencies": [],
-            "gradle_dependencies": [],
-            "internal_modules": [],
-            "spring_dependencies": [],
-            "jakarta_dependencies": [],
-            "incompatible_dependencies": [],
-            "recommended_versions": {},
-            "migration_blockers": [],
-            "transitive_conflicts": []
-        }
-        
-        # Thread-safe result collection
-        results_lock = threading.Lock()
-        
-        def analyze_single_file(build_file, content):
-            try:
-                print(f"   Analyzing {build_file} (concurrent)...")
-                return self._analyze_build_file_with_llm(build_file, content, project_name, use_cache)
-            except Exception as e:
-                print(f"   Error analyzing {build_file}: {e}")
-                return self._get_empty_dependency_analysis()
-        
-        # Process files concurrently
-        with ThreadPoolExecutor(max_workers=min(4, len(dependency_info))) as executor:
-            future_to_file = {
-                executor.submit(analyze_single_file, build_file, content): build_file
-                for build_file, content in dependency_info.items()
-            }
-            
-            for future in as_completed(future_to_file):
-                build_file = future_to_file[future]
-                try:
-                    file_analysis = future.result()
-                    
-                    # Merge results thread-safely
-                    with results_lock:
-                        for category in compatibility_analysis:
-                            if category in file_analysis:
-                                if isinstance(compatibility_analysis[category], list):
-                                    compatibility_analysis[category].extend(file_analysis[category])
-                                else:
-                                    compatibility_analysis[category].update(file_analysis[category])
+                # Skip empty lines
+                if not line.strip():
+                    cleaned_lines.append(line)
+                    continue
                 
-                except Exception as e:
-                    print(f"   Failed to process {build_file}: {e}")
-        
-        return compatibility_analysis
-    
-    def _analyze_dependencies_sequentially(self, dependency_info, project_name, use_cache):
-        """Analyze dependencies sequentially (existing method)."""
-        compatibility_analysis = {
-            "maven_dependencies": [],
-            "gradle_dependencies": [],
-            "internal_modules": [],
-            "spring_dependencies": [],
-            "jakarta_dependencies": [],
-            "incompatible_dependencies": [],
-            "recommended_versions": {},
-            "migration_blockers": [],
-            "transitive_conflicts": []
-        }
-        
-        # Analyze each build file
-        for build_file, content in dependency_info.items():
-            print(f"   Analyzing {build_file}...")
-            file_analysis = self._analyze_build_file_with_llm(build_file, content, project_name, use_cache)
+                # Only process lines that look like JSON key-value pairs
+                if ':' in line and '"' in line:
+                    # Look for pattern: "key": "value with "internal quotes""
+                    # We need to be careful not to escape the structural quotes
+                    
+                    # Find the colon that separates key from value
+                    colon_pos = line.find(':')
+                    if colon_pos > 0:
+                        key_part = line[:colon_pos + 1]
+                        value_part = line[colon_pos + 1:].strip()
+                        
+                        # Only fix if we have a string value (starts with quote)
+                        if value_part.startswith('"'):
+                            # More careful approach: find matching closing quote
+                            # Look for the pattern: "text with "quotes" inside",
+                            if value_part.count('"') > 2:  # More than just opening and closing
+                                # Use regex to find and fix only internal quotes
+                                # Pattern: "anything with "quotes" inside"
+                                import re
+                                # This pattern captures: "start_text "quoted_text" end_text"
+                                pattern = r'^"([^"]*)"([^"]*)"([^"]*)"(.*)$'
+                                match = re.match(pattern, value_part)
+                                if match:
+                                    start, quoted, end, suffix = match.groups()
+                                    # Reconstruct with escaped internal quotes
+                                    fixed_value = f'"{start}\\"{quoted}\\"{end}"{suffix}'
+                                    line = key_part + ' ' + fixed_value
+                
+                cleaned_lines.append(line)
             
-            # Merge results
-            for category in compatibility_analysis:
-                if category in file_analysis:
-                    if isinstance(compatibility_analysis[category], list):
-                        compatibility_analysis[category].extend(file_analysis[category])
-                    else:
-                        compatibility_analysis[category].update(file_analysis[category])
-        
-        return compatibility_analysis
-    
-    def _extract_build_files(self, files_data):
-        """Extract build files (pom.xml, build.gradle, etc.) for dependency analysis."""
-        build_files = {}
-        
-        for file_path, content in files_data:
-            if any(file_path.endswith(pattern) for pattern in ['pom.xml', 'build.gradle', 'build.gradle.kts', 'gradle.properties']):
-                build_files[file_path] = content
-            elif 'dependencies' in file_path.lower() or 'libs' in file_path.lower():
-                # Include other dependency-related files
-                build_files[file_path] = content
-        
-        return build_files
-    
-    def _parse_dependencies(self, build_files):
-        """Parse dependencies from build files to extract basic information."""
-        parsed_dependencies = {}
-        
-        for file_path, content in build_files.items():
-            if file_path.endswith('pom.xml'):
-                parsed_dependencies[file_path] = self._parse_maven_dependencies(content)
-            elif file_path.endswith(('.gradle', '.gradle.kts')):
-                parsed_dependencies[file_path] = self._parse_gradle_dependencies(content)
-            else:
-                parsed_dependencies[file_path] = content
-        
-        return parsed_dependencies
-    
-    def _parse_maven_dependencies(self, content):
-        """Extract Maven dependency information."""
-        import re
-        
-        dependencies = []
-        
-        # Find dependency blocks
-        dependency_pattern = r'<dependency>(.*?)</dependency>'
-        dependencies_matches = re.findall(dependency_pattern, content, re.DOTALL)
-        
-        for dep_block in dependencies_matches:
-            group_match = re.search(r'<groupId>(.*?)</groupId>', dep_block)
-            artifact_match = re.search(r'<artifactId>(.*?)</artifactId>', dep_block)
-            version_match = re.search(r'<version>(.*?)</version>', dep_block)
+            cleaned_json = '\n'.join(cleaned_lines)
             
-            if group_match and artifact_match:
-                dependencies.append({
-                    'groupId': group_match.group(1).strip(),
-                    'artifactId': artifact_match.group(1).strip(),
-                    'version': version_match.group(1).strip() if version_match else 'unknown',
-                    'type': 'maven'
-                })
-        
-        return {
-            'raw_content': content,
-            'parsed_dependencies': dependencies,
-            'spring_boot_version': self._extract_spring_boot_version_maven(content),
-            'java_version': self._extract_java_version_maven(content)
-        }
-    
-    def _parse_gradle_dependencies(self, content):
-        """Extract Gradle dependency information."""
-        import re
-        
-        dependencies = []
-        
-        # Find dependency declarations
-        dependency_patterns = [
-            r"implementation\s+['\"]([^'\"]+)['\"]",
-            r"compile\s+['\"]([^'\"]+)['\"]",
-            r"api\s+['\"]([^'\"]+)['\"]",
-            r"testImplementation\s+['\"]([^'\"]+)['\"]"
-        ]
-        
-        for pattern in dependency_patterns:
-            matches = re.findall(pattern, content)
-            for match in matches:
-                parts = match.split(':')
-                if len(parts) >= 2:
-                    dependencies.append({
-                        'groupId': parts[0],
-                        'artifactId': parts[1],
-                        'version': parts[2] if len(parts) > 2 else 'unknown',
-                        'type': 'gradle'
-                    })
-        
-        return {
-            'raw_content': content,
-            'parsed_dependencies': dependencies,
-            'spring_boot_version': self._extract_spring_boot_version_gradle(content),
-            'java_version': self._extract_java_version_gradle(content)
-        }
-    
-    def _extract_spring_boot_version_maven(self, content):
-        """Extract Spring Boot version from Maven pom.xml."""
-        import re
-        
-        # Look for Spring Boot parent
-        parent_pattern = r'<parent>.*?<groupId>org\.springframework\.boot</groupId>.*?<version>(.*?)</version>.*?</parent>'
-        parent_match = re.search(parent_pattern, content, re.DOTALL)
-        if parent_match:
-            return parent_match.group(1).strip()
-        
-        # Look for Spring Boot version property
-        version_pattern = r'<spring\.boot\.version>(.*?)</spring\.boot\.version>'
-        version_match = re.search(version_pattern, content)
-        if version_match:
-            return version_match.group(1).strip()
-        
-        return None
-    
-    def _extract_spring_boot_version_gradle(self, content):
-        """Extract Spring Boot version from Gradle build file."""
-        import re
-        
-        # Look for Spring Boot plugin
-        plugin_pattern = r"id\s+['\"]org\.springframework\.boot['\"].*?version\s+['\"]([^'\"]+)['\"]"
-        plugin_match = re.search(plugin_pattern, content)
-        if plugin_match:
-            return plugin_match.group(1).strip()
-        
-        # Look for version variable
-        version_pattern = r"springBootVersion\s*=\s*['\"]([^'\"]+)['\"]"
-        version_match = re.search(version_pattern, content)
-        if version_match:
-            return version_match.group(1).strip()
-        
-        return None
-    
-    def _extract_java_version_maven(self, content):
-        """Extract Java version from Maven pom.xml."""
-        import re
-        
-        patterns = [
-            r'<maven\.compiler\.source>(.*?)</maven\.compiler\.source>',
-            r'<maven\.compiler\.target>(.*?)</maven\.compiler\.target>',
-            r'<java\.version>(.*?)</java\.version>'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content)
-            if match:
-                return match.group(1).strip()
-        
-        return None
-    
-    def _extract_java_version_gradle(self, content):
-        """Extract Java version from Gradle build file."""
-        import re
-        
-        patterns = [
-            r"sourceCompatibility\s*=\s*['\"]?([^'\"\\s]+)['\"]?",
-            r"targetCompatibility\s*=\s*['\"]?([^'\"\\s]+)['\"]?",
-            r"javaVersion\s*=\s*['\"]([^'\"]+)['\"]"
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content)
-            if match:
-                return match.group(1).strip()
-        
-        return None
-    
-    def _analyze_build_file_with_llm(self, file_path, content_info, project_name, use_cache):
-        """Use LLM to analyze dependency compatibility."""
-        
-        if isinstance(content_info, dict):
-            content = content_info.get('raw_content', str(content_info))
-            parsed_deps = content_info.get('parsed_dependencies', [])
-            spring_boot_version = content_info.get('spring_boot_version')
-            java_version = content_info.get('java_version')
-        else:
-            content = content_info
-            parsed_deps = []
-            spring_boot_version = None
-            java_version = None
-        
-        # Truncate content for LLM analysis
-        if len(content) > 8000:
-            content = content[:8000] + "\\n... [Content truncated for analysis]"
-        
-        prompt = f"""# Spring 6 Dependency Compatibility Analysis
-
-You are a Spring Framework migration expert analyzing dependency compatibility for Spring 6 migration.
-
-## Project Context:
-- **Project**: {project_name}
-- **Build File**: {file_path}
-- **Current Spring Boot Version**: {spring_boot_version or 'Unknown'}
-- **Current Java Version**: {java_version or 'Unknown'}
-
-## Build File Content:
-```
-{content}
-```
-
-## Analysis Requirements:
-
-Analyze the ACTUAL dependencies in this build file for Spring 6 compatibility. Base all recommendations on what you actually find, not on assumptions.
-
-### 1. Current State Analysis
-- Identify ACTUAL current Spring/Spring Boot versions from this build file
-- Determine ACTUAL Java version requirements from this build file
-- List ALL dependencies actually declared in this build file
-
-### 2. Jakarta EE Dependencies Analysis
-- Find dependencies that actually use javax.* namespaces in this build file
-- Identify which of these dependencies have jakarta.* compatible versions available
-- Flag libraries that haven't migrated to Jakarta (if any are actually present)
-
-### 3. Third-Party Library Compatibility Analysis
-- Check ACTUAL libraries declared in this build file for Spring 6 compatibility
-- Identify minimum versions required for Spring 6 (for libraries actually present)
-- Flag incompatible or deprecated libraries (if any are actually found)
-
-### 4. Version Conflict Analysis
-- Identify potential version conflicts between actual dependencies
-- Check for mixing javax.* and jakarta.* dependencies in actual declarations
-
-## CRITICAL: Output ONLY valid JSON based on ACTUAL analysis:
-
-```json
-{{
-  "maven_dependencies": [
-    {{
-      "groupId": "actual_group_id_found",
-      "artifactId": "actual_artifact_id_found", 
-      "currentVersion": "actual_version_found_or_version_not_determinable",
-      "compatible": true/false,
-      "recommendedVersion": "specific_version_if_determinable_or_needs_research",
-      "compatibilityIssues": ["actual_issues_found"],
-      "migrationRequired": true/false
-    }}
-  ],
-  "gradle_dependencies": [
-    {{
-      "groupId": "actual_group_id_found",
-      "artifactId": "actual_artifact_id_found",
-      "currentVersion": "actual_version_found_or_version_not_determinable", 
-      "compatible": true/false,
-      "recommendedVersion": "specific_version_if_determinable_or_needs_research",
-      "compatibilityIssues": ["actual_issues_found"],
-      "migrationRequired": true/false
-    }}
-  ],
-  "spring_dependencies": [
-    {{
-      "component": "actual_spring_component_found",
-      "currentVersion": "actual_version_found",
-      "targetVersion": "recommended_version_if_determinable",
-      "migrationPath": "specific_migration_path_if_known",
-      "breakingChanges": ["actual_breaking_changes_if_known"]
-    }}
-  ],
-  "jakarta_dependencies": [
-    {{
-      "dependency": "actual_dependency_found",
-      "currentNamespace": "actual_javax_namespace_found",
-      "targetNamespace": "corresponding_jakarta_namespace",
-      "compatibleVersion": "version_if_determinable",
-      "available": true/false
-    }}
-  ],
-  "incompatible_dependencies": [
-    {{
-      "dependency": "actual_incompatible_dependency_found",
-      "reason": "specific_reason_based_on_analysis",
-      "alternatives": ["actual_alternatives_if_known"],
-      "migrationComplexity": "Low|Medium|High"
-    }}
-  ],
-  "recommended_versions": {{
-    "springBoot": "based_on_actual_analysis_or_needs_research",
-    "springFramework": "based_on_actual_analysis_or_needs_research",
-    "java": "based_on_actual_requirements_found",
-    "hibernate": "based_on_actual_usage_found"
-  }},
-  "migration_blockers": [
-    {{
-      "blocker": "actual_blocker_found_in_analysis",
-      "impact": "Low|Medium|High|Critical",
-      "resolution": "specific_resolution_based_on_analysis"
-    }}
-  ]
-}}
-```
-
-IMPORTANT ANALYSIS GUIDELINES:
-- Base ALL recommendations on what you ACTUALLY find in the build file
-- If you cannot determine a current version, use "version_not_determinable"
-- If you cannot recommend a specific version, use "needs_research" 
-- Only flag actual compatibility issues you can identify from the dependencies
-- Do NOT make assumptions about upgrade paths
-- Do NOT provide generic version recommendations
-- Focus on the specific dependencies actually declared in this build file
-- If no Spring dependencies are found, state that clearly
-- If the build file doesn't contain enough information, state that clearly
-
-Analyze the build file content and provide recommendations based on actual findings only."""
-
-        try:
-            response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
+            # 2. Balance brackets and braces
+            open_braces = cleaned_json.count('{')
+            close_braces = cleaned_json.count('}')
+            open_brackets = cleaned_json.count('[')
+            close_brackets = cleaned_json.count(']')
             
-            # Extract and parse JSON
-            json_str = self._extract_and_clean_json(response, file_path)
-            if not json_str:
-                print(f"     No valid JSON found in dependency analysis for {file_path}")
-                return self._get_empty_dependency_analysis()
+            if open_braces > close_braces:
+                cleaned_json += '}' * (open_braces - close_braces)
+            elif close_braces > open_braces:
+                # Remove extra closing braces from the end
+                extra_braces = close_braces - open_braces
+                for _ in range(extra_braces):
+                    last_brace = cleaned_json.rfind('}')
+                    if last_brace != -1:
+                        cleaned_json = cleaned_json[:last_brace] + cleaned_json[last_brace + 1:]
             
-            analysis = json.loads(json_str)
+            if open_brackets > close_brackets:
+                cleaned_json += ']' * (open_brackets - close_brackets)
+            elif close_brackets > open_brackets:
+                # Remove extra closing brackets from the end
+                extra_brackets = close_brackets - open_brackets
+                for _ in range(extra_brackets):
+                    last_bracket = cleaned_json.rfind(']')
+                    if last_bracket != -1:
+                        cleaned_json = cleaned_json[:last_bracket] + cleaned_json[last_bracket + 1:]
             
-            # Validate structure
-            expected_keys = ["maven_dependencies", "gradle_dependencies", "spring_dependencies", 
-                           "jakarta_dependencies", "incompatible_dependencies", "recommended_versions", "migration_blockers"]
-            for key in expected_keys:
-                if key not in analysis:
-                    analysis[key] = [] if key != "recommended_versions" else {}
-            
-            return analysis
+            return cleaned_json
             
         except Exception as e:
-            print(f"     Error analyzing dependencies in {file_path}: {e}")
-            return self._get_empty_dependency_analysis()
+            print(f"     Advanced JSON cleaning failed for {file_path}: {e}")
+            return json_str
     
-    def _get_empty_dependency_analysis(self):
-        """Return empty dependency analysis structure."""
-        return {
-            "maven_dependencies": [],
-            "gradle_dependencies": [],
-            "spring_dependencies": [],
-            "jakarta_dependencies": [],
-            "incompatible_dependencies": [],
-            "recommended_versions": {},
-            "migration_blockers": []
-        }
-    
-    def _extract_and_clean_json(self, response, file_path):
-        """Extract and clean JSON from LLM response."""
+    def _attempt_json_repair(self, json_str, file_path):
+        """Attempt to repair malformed JSON with specific strategies."""
         try:
-            response = response.strip()
+            import re
             
-            if "```json" in response:
-                json_str = response.split("```json")[1].split("```")[0].strip()
-            elif response.startswith("{") and response.endswith("}"):
-                json_str = response
-            else:
-                import re
-                json_match = re.search(r'\\{.*\\}', response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    return None
+            # Strategy 1: Remove trailing commas
+            json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
             
-            # Basic JSON cleaning
-            json_str = json_str.strip()
+            # Strategy 2: Fix missing commas between array/object elements
+            json_str = re.sub(r'(\}|\])\s*(\{|\[)', r'\1,\2', json_str)
             
-            # Test parse
-            json.loads(json_str)
+            # Strategy 3: Fix line breaks in string values
+            json_str = re.sub(r'"\s*\n\s*"', r'" "', json_str)
+            
+            # Strategy 4: Remove comments (if any)
+            json_str = re.sub(r'//.*$', '', json_str, flags=re.MULTILINE)
+            json_str = re.sub(r'/\*.*?\*/', '', json_str, flags=re.DOTALL)
+            
+            # Strategy 5: Fix common typos in JSON structure
+            json_str = json_str.replace('}{', '},{')  # Missing comma between objects
+            json_str = json_str.replace(']]', ']')     # Double closing brackets
+            json_str = json_str.replace('}}', '}')     # Double closing braces
+            
+            # Strategy 6: More aggressive quote fixing
+            # Replace problematic quote patterns
+            json_str = re.sub(r'(["\s:])\s*"([^"]*)"([^"]*)"([^"]*?)"\s*([,}\]])', r'\1"\2\\"\3\\"\4"\5', json_str)
+            
+            # Strategy 7: Ensure proper string termination
+            quote_count = json_str.count('"')
+            if quote_count % 2 != 0:
+                # Odd number of quotes - try to fix by adding a closing quote at the end
+                if not json_str.rstrip().endswith('"'):
+                    json_str = json_str.rstrip() + '"'
+            
+            # Strategy 8: Fix malformed object structures that break between matching braces
+            # Try to handle cases where the JSON structure itself is broken
+            if json_str.count('{') != json_str.count('}'):
+                diff = json_str.count('{') - json_str.count('}')
+                if diff > 0:
+                    json_str += '}' * diff
+            
             return json_str
             
         except Exception:
             return None
     
-    def post(self, shared, prep_res, exec_res):
-        shared["dependency_compatibility"] = exec_res
-        
-        # Count issues
-        total_incompatible = len(exec_res.get("incompatible_dependencies", []))
-        total_blockers = len(exec_res.get("migration_blockers", []))
-        jakarta_migrations = len(exec_res.get("jakarta_dependencies", []))
-        
-        print(f"✅ Dependency compatibility analysis completed")
-        print(f"   🚨 {total_incompatible} incompatible dependencies found")
-        print(f"   🔄 {jakarta_migrations} javax → jakarta migrations needed")
-        print(f"   ⚠️  {total_blockers} migration blockers identified")
-        
-        return "default"
-    
-    def _analyze_dependency_relationships(self, dependency_info):
-        """Analyze relationships between dependencies."""
-        return {
-            "transitive_conflicts": [],
-            "version_mismatches": [],
-            "circular_dependencies": []
-        }
-    
-    def _detect_version_conflicts(self, compatibility_analysis):
-        """Detect version conflicts in the analysis."""
-        return []
-    
-    def _generate_dependency_migration_roadmap(self, compatibility_analysis):
-        """Generate a migration roadmap for dependencies."""
-        return [
-            {
-                "step": 1,
-                "title": "Dependency Analysis Review",
-                "description": "Review dependency compatibility analysis results",
-                "estimated_effort": "1-2 days"
-            }
-        ]
+    def _is_text_file(self, file_path, content):
+        """Check if a file appears to be a text file suitable for analysis."""
+        # Use the same logic as RobustFileReader for consistency
+        try:
+            # Check for null bytes (common in binary files)
+            if b'\x00' in content.encode('utf-8', errors='ignore'):
+                return False
+                
+            # Check for high ratio of non-printable characters
+            if len(content) > 0:
+                printable_chars = sum(1 for char in content if char.isprintable() or char in ['\n', '\r', '\t'])
+                printable_ratio = printable_chars / len(content)
+                
+                # If less than 70% printable characters, likely binary
+                if printable_ratio < 0.7:
+                    return False
+            
+            return True
+            
+        except Exception:
+            return False  # Assume binary if we can't analyze it

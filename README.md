@@ -82,7 +82,7 @@ An intelligent tool that analyzes Spring Framework projects and provides compreh
 4. **For Private Repositories**: Set up your GitHub Personal Access Token
    
    **Option 1: Environment Variable (Recommended)**
-   ```bash
+    ```bash
    export GITHUB_TOKEN="your_github_personal_access_token_here"
    ```
    
@@ -397,7 +397,7 @@ pip install -r requirements-dev.txt  # If available
    ```bash
    python utils/call_llm.py
    ```
-
+   
 4. **For Private Repositories**: Set up your GitHub Personal Access Token
    
    **Option 1: Environment Variable (Recommended)**

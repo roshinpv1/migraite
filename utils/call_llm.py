@@ -29,15 +29,15 @@ logger.addHandler(file_handler)
 cache_file = "llm_cache.json"
 
 # Configure LLM settings for large repositories
-DEFAULT_TIMEOUT = 300  # 5 minutes for large prompts
-MAX_RETRIES = 3
-RATE_LIMIT_DELAY = 2  # seconds between requests
-MAX_CONTEXT_LENGTH = 100000  # chars - adjust based on LLM model
+DEFAULT_TIMEOUT = 900  # 15 minutes for very large prompts (increased from 5 minutes)
+MAX_RETRIES = 5  # More retries for better reliability (increased from 3)
+RATE_LIMIT_DELAY = 1  # Reduced delay between requests (reduced from 2 seconds)
+MAX_CONTEXT_LENGTH = 200000  # Increased context length for larger analysis (increased from 100000)
 
 
 def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RETRIES):
     """
-    Enhanced LLM calling with timeout handling, rate limiting, and large content optimization.
+    Enhanced LLM calling with maximum timeout handling, aggressive retry logic, and large content optimization.
     """
     vlogger = get_verbose_logger()
     
@@ -45,6 +45,11 @@ def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RE
     if len(prompt) > MAX_CONTEXT_LENGTH:
         vlogger.warning(f"Large prompt detected ({len(prompt)} chars), truncating to {MAX_CONTEXT_LENGTH}")
         prompt = _optimize_large_prompt(prompt)
+    
+    # Use maximum timeout for large prompts
+    if len(prompt) > 50000:
+        timeout = max(timeout, 1800)  # Force 30 minutes for very large prompts
+        vlogger.debug(f"Large prompt detected, using extended timeout: {timeout}s")
     
     # Generate cache key
     cache_key = hashlib.md5(prompt.encode()).hexdigest()
@@ -57,18 +62,19 @@ def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RE
         else:
             vlogger.cache_miss("LLM", cache_key[:8])
     
-    # Track attempt number for verbose logging
+    # Track attempt number for verbose logging with enhanced retry logic for timeouts
     for attempt in range(max_retries):
         try:
             if attempt > 0:
-                # Rate limiting: wait before retry
-                delay = RATE_LIMIT_DELAY * (2 ** attempt)  # Exponential backoff
-                vlogger.warning(f"LLM retry {attempt + 1}/{max_retries}, waiting {delay}s")
+                # More aggressive backoff for timeout errors, less aggressive for other errors
+                base_delay = RATE_LIMIT_DELAY if attempt == 1 else RATE_LIMIT_DELAY * (1.5 ** (attempt - 1))
+                delay = min(base_delay, 30)  # Cap at 30 seconds
+                vlogger.warning(f"LLM retry {attempt + 1}/{max_retries}, waiting {delay:.1f}s")
                 time.sleep(delay)
             
             vlogger.llm_call(f"Attempt {attempt + 1}", "", len(prompt), use_cache)
             
-            # Use the appropriate LLM provider
+            # Use the appropriate LLM provider with extended timeout
             response = _make_llm_request(prompt, timeout)
             
             # Cache successful response
@@ -80,8 +86,12 @@ def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RE
             
         except TimeoutError as e:
             vlogger.error(f"LLM request timeout on attempt {attempt + 1}", e)
-            if attempt == max_retries - 1:
-                raise Exception(f"LLM request timed out after {max_retries} attempts")
+            # For timeout errors, try with even longer timeout on next attempt
+            if attempt < max_retries - 1:
+                timeout = min(timeout * 1.5, 3600)  # Increase timeout up to 1 hour
+                vlogger.warning(f"Increasing timeout to {timeout}s for next attempt")
+            else:
+                raise Exception(f"LLM request timed out after {max_retries} attempts with maximum timeout")
         except Exception as e:
             vlogger.error(f"LLM request failed on attempt {attempt + 1}", e)
             if attempt == max_retries - 1:
@@ -170,7 +180,7 @@ def _make_llm_request(prompt, timeout):
 
 
 def _call_openai(prompt, timeout):
-    """Call OpenAI with timeout handling."""
+    """Call OpenAI with enhanced timeout handling."""
     try:
         from openai import OpenAI
         import signal
@@ -178,20 +188,28 @@ def _call_openai(prompt, timeout):
         def timeout_handler(signum, frame):
             raise TimeoutError("OpenAI request timed out")
         
-        # Set timeout alarm
+        # Use extended timeout for very large requests
+        extended_timeout = max(timeout, 900)  # At least 15 minutes
+        
+        # Set timeout alarm with extended time
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(timeout)
+        signal.alarm(extended_timeout)
         
         try:
             client_kwargs = {
                 "api_key": os.environ.get("OPENAI_API_KEY", "your-api-key"),
-                "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1")
+                "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1"),
+                "timeout": extended_timeout  # Set client-level timeout
             }
             client = OpenAI(**client_kwargs)
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
-                timeout=timeout
+                timeout=extended_timeout,  # Set request-level timeout
+                # Additional parameters for better handling of large requests
+                max_tokens=8192,  # Increased from default
+                temperature=0.1,  # Lower temperature for more consistent responses
+                top_p=0.9
             )
             return response.choices[0].message.content
         finally:
@@ -206,15 +224,23 @@ def _call_openai(prompt, timeout):
 
 
 def _call_anthropic(prompt, timeout):
-    """Call Anthropic with timeout handling."""
+    """Call Anthropic with enhanced timeout handling."""
     try:
         from anthropic import Anthropic
-        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        # Use extended timeout for very large requests
+        extended_timeout = max(timeout, 900)  # At least 15 minutes
+        
+        client = Anthropic(
+            api_key=os.getenv('ANTHROPIC_API_KEY'),
+            timeout=extended_timeout  # Set client-level timeout
+        )
         response = client.messages.create(
             model="claude-3-sonnet-20240229",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4000,
-            timeout=timeout
+            max_tokens=8192,  # Increased for better response completeness
+            timeout=extended_timeout,  # Set request-level timeout
+            temperature=0.1  # Lower temperature for more consistent responses
         )
         return response.content[0].text
     except ImportError:
@@ -224,15 +250,46 @@ def _call_anthropic(prompt, timeout):
 
 
 def _call_google(prompt, timeout):
-    """Call Google Generative AI with timeout handling."""
+    """Call Google Generative AI with enhanced timeout handling."""
     try:
         import google.generativeai as genai
+        import asyncio
+        
+        # Use extended timeout for very large requests
+        extended_timeout = max(timeout, 900)  # At least 15 minutes
+        
         genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
-        model = genai.GenerativeModel('gemini-pro')
-        response = model.generate_content(prompt)
-        return response.text
+        
+        # Configure generation config for better handling of large requests
+        generation_config = {
+            "temperature": 0.1,  # Lower temperature for consistency
+            "top_p": 0.9,
+            "top_k": 40,
+            "max_output_tokens": 8192  # Increased output tokens
+        }
+        
+        model = genai.GenerativeModel('gemini-pro', generation_config=generation_config)
+        
+        # Use asyncio timeout for better timeout handling
+        async def generate_with_timeout():
+            return await asyncio.wait_for(
+                asyncio.to_thread(model.generate_content, prompt),
+                timeout=extended_timeout
+            )
+        
+        # Run the async function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            response = loop.run_until_complete(generate_with_timeout())
+            return response.text
+        finally:
+            loop.close()
+            
     except ImportError:
         raise Exception("Google Generative AI library not installed")
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"Google AI request timed out after {extended_timeout} seconds")
     except Exception as e:
         raise Exception(f"Google AI error: {str(e)}")
 
@@ -473,16 +530,45 @@ def apply_rate_limiting():
 
 
 def configure_for_large_repository():
-    """Configure LLM settings for large repository analysis."""
+    """Configure LLM settings for large repository analysis with maximum timeout values."""
     global DEFAULT_TIMEOUT, MAX_CONTEXT_LENGTH, _max_requests_per_window
     
-    DEFAULT_TIMEOUT = 600  # 10 minutes for very large prompts
-    MAX_CONTEXT_LENGTH = 50000  # Reduce context for large repos
-    _max_requests_per_window = 10  # More conservative rate limiting
+    DEFAULT_TIMEOUT = 1800  # 30 minutes for very large prompts (increased from 10 minutes)
+    MAX_CONTEXT_LENGTH = 300000  # Larger context for comprehensive analysis (increased from 50000)
+    _max_requests_per_window = 15  # Slightly more requests allowed (increased from 10)
     
     vlogger = get_verbose_logger()
     vlogger.optimization_applied("Large repository LLM configuration", 
                                 f"timeout={DEFAULT_TIMEOUT}s, context={MAX_CONTEXT_LENGTH}, rate_limit={_max_requests_per_window}/min")
+
+
+def configure_maximum_timeouts():
+    """Configure maximum timeout settings for complex migration analysis."""
+    global DEFAULT_TIMEOUT, MAX_CONTEXT_LENGTH, _max_requests_per_window, MAX_RETRIES
+    
+    # Maximum settings for complex analysis
+    DEFAULT_TIMEOUT = 3600  # 1 hour maximum timeout
+    MAX_CONTEXT_LENGTH = 500000  # Maximum context length for comprehensive analysis
+    MAX_RETRIES = 8  # Maximum retries with progressive timeout increases
+    _max_requests_per_window = 20  # More requests allowed for maximum throughput
+    
+    vlogger = get_verbose_logger()
+    vlogger.optimization_applied("Maximum timeout configuration", 
+                                f"timeout={DEFAULT_TIMEOUT}s, context={MAX_CONTEXT_LENGTH}, retries={MAX_RETRIES}, rate_limit={_max_requests_per_window}/min")
+    print(f"🚀 Configured maximum LLM timeouts: {DEFAULT_TIMEOUT}s timeout, {MAX_RETRIES} retries")
+
+
+def auto_configure_timeouts_for_repository_size(file_count):
+    """Automatically configure timeouts based on repository size."""
+    if file_count > 500:
+        print(f"📊 Large repository detected ({file_count} files) - configuring maximum timeouts")
+        configure_maximum_timeouts()
+    elif file_count > 200:
+        print(f"📊 Medium-large repository detected ({file_count} files) - configuring extended timeouts")
+        configure_for_large_repository()
+    else:
+        print(f"📊 Standard repository size ({file_count} files) - using default timeouts")
+
 
 if __name__ == "__main__":
     test_prompt = "Hello, how are you?"
