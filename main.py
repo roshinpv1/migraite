@@ -170,7 +170,7 @@ def apply_migration_changes(shared, verbose_mode=False):
         from nodes import MigrationChangeGenerator, GitMigrationManager
         
         # Get the generated changes from the shared state
-        generated_changes = shared.get("applied_changes", {})
+        generated_changes = shared.get("generated_changes", {})
         backup_info = shared.get("backup_info", {})
         
         if not generated_changes:
@@ -347,7 +347,8 @@ Examples:
     parser.add_argument("--apply-changes", action="store_true",
                        help="Apply automatic migration changes to source files")
     parser.add_argument("--git-integration", action="store_true",
-                       help="Enable Git operations (commit, push, PR preparation)")
+                       help="Enable git integration with branch creation and change staging")
+    parser.add_argument("--git-branch", help="Specify git branch name for migration (requires --git-integration)")
     parser.add_argument("--no-cache", action="store_true",
                        help="Disable LLM response caching")
     parser.add_argument("--quick-analysis", action="store_true",
@@ -484,7 +485,7 @@ Examples:
                     
                     # Show brief summary of what will be changed
                     if "applied_changes" in shared or "generated_changes" in shared:
-                        changes_data = shared.get("applied_changes", shared.get("generated_changes", {}))
+                        changes_data = shared.get("generated_changes", shared.get("applied_changes", {}))
                         if isinstance(changes_data, dict):
                             total_changes = sum(len(changes) for changes in changes_data.values() if isinstance(changes, list))
                             if total_changes > 0:

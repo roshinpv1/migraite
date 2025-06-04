@@ -2604,3 +2604,171 @@ Analyze the file and return ONLY the JSON object:"""
         except Exception as e:
             print(f"     Warning: Error validating change for {file_path}: {e}")
             return False
+
+    def post(self, shared, prep_res, exec_res):
+        """Store the generated migration changes in the shared state."""
+        vlogger = get_verbose_logger()
+        
+        # Store the generated changes
+        shared["generated_changes"] = exec_res
+        
+        # Calculate and store summary statistics
+        total_changes = 0
+        changes_by_category = {}
+        
+        for category, changes in exec_res.items():
+            if isinstance(changes, list):
+                category_count = len(changes)
+                total_changes += category_count
+                changes_by_category[category] = category_count
+        
+        shared["migration_changes_summary"] = {
+            "total_changes": total_changes,
+            "changes_by_category": changes_by_category
+        }
+        
+        # Generate detailed line-by-line change report
+        line_change_report = self._generate_line_change_report(exec_res)
+        shared["line_change_report"] = line_change_report
+        
+        # Log the results
+        if shared.get("verbose_mode"):
+            vlogger.success(f"Migration changes generated: {total_changes} total changes")
+            for category, count in changes_by_category.items():
+                if count > 0:
+                    category_name = category.replace('_', ' ').title()
+                    vlogger.debug(f"{category_name}: {count} changes")
+        
+        print(f"✅ Generated {total_changes} migration changes across {len([c for c in changes_by_category.values() if c > 0])} categories")
+        
+        # Show line-by-line summary if changes exist
+        if total_changes > 0:
+            self._print_line_change_summary(line_change_report)
+        
+        return "default"
+
+    def _generate_line_change_report(self, changes):
+        """Generate a detailed report showing which lines are modified in each file."""
+        line_report = {
+            "files_modified": {},
+            "summary": {
+                "total_files": 0,
+                "total_lines_changed": 0,
+                "changes_by_type": {}
+            }
+        }
+        
+        all_files = set()
+        total_lines = 0
+        changes_by_type = {}
+        
+        # Process all changes and group by file
+        for category, change_list in changes.items():
+            if not isinstance(change_list, list):
+                continue
+                
+            for change in change_list:
+                if not isinstance(change, dict):
+                    continue
+                
+                file_path = change.get("file", "unknown")
+                change_type = change.get("type", "unknown")
+                line_numbers = change.get("line_numbers", [])
+                description = change.get("description", "")
+                
+                # Initialize file entry if needed
+                if file_path not in line_report["files_modified"]:
+                    line_report["files_modified"][file_path] = {
+                        "changes": [],
+                        "line_count": len(set(line_numbers)) if line_numbers else 0,
+                        "categories": set()
+                    }
+                
+                # Add change to file
+                line_report["files_modified"][file_path]["changes"].append({
+                    "type": change_type,
+                    "category": category,
+                    "description": description,
+                    "line_numbers": line_numbers,
+                    "automatic": change.get("automatic", False)
+                })
+                
+                # Update file stats
+                if line_numbers:
+                    line_report["files_modified"][file_path]["line_count"] += len(set(line_numbers))
+                line_report["files_modified"][file_path]["categories"].add(category)
+                
+                # Update global stats
+                all_files.add(file_path)
+                total_lines += len(line_numbers) if line_numbers else 1
+                changes_by_type[change_type] = changes_by_type.get(change_type, 0) + 1
+        
+        # Convert sets to lists for JSON serialization
+        for file_path in line_report["files_modified"]:
+            line_report["files_modified"][file_path]["categories"] = list(line_report["files_modified"][file_path]["categories"])
+        
+        # Update summary
+        line_report["summary"] = {
+            "total_files": len(all_files),
+            "total_lines_changed": total_lines,
+            "changes_by_type": changes_by_type
+        }
+        
+        return line_report
+
+    def _print_line_change_summary(self, line_report):
+        """Print a summary of line-by-line changes to the console."""
+        files_modified = line_report.get("files_modified", {})
+        summary = line_report.get("summary", {})
+        
+        if not files_modified:
+            return
+        
+        print(f"\n📋 Line-by-Line Change Summary:")
+        print(f"   📁 Files Modified: {summary.get('total_files', 0)}")
+        print(f"   📝 Lines Changed: {summary.get('total_lines_changed', 0)}")
+        print()
+        
+        # Show details for each modified file
+        for file_path, file_info in sorted(files_modified.items()):
+            changes = file_info.get("changes", [])
+            line_count = file_info.get("line_count", 0)
+            categories = file_info.get("categories", [])
+            
+            print(f"   📄 {file_path}")
+            print(f"      📝 {len(changes)} changes, ~{line_count} lines affected")
+            print(f"      🏷️  Categories: {', '.join(categories)}")
+            
+            # Show specific line numbers for up to 3 changes
+            for i, change in enumerate(changes[:3]):
+                line_numbers = change.get("line_numbers", [])
+                change_type = change.get("type", "unknown")
+                automatic = change.get("automatic", False)
+                
+                if line_numbers:
+                    line_range = self._format_line_range(line_numbers)
+                    auto_marker = "🤖" if automatic else "👤"
+                    print(f"      {auto_marker} {change_type}: lines {line_range}")
+                else:
+                    auto_marker = "🤖" if automatic else "👤"
+                    print(f"      {auto_marker} {change_type}: location TBD")
+            
+            if len(changes) > 3:
+                print(f"      ... and {len(changes) - 3} more changes")
+            print()
+
+    def _format_line_range(self, line_numbers):
+        """Format line numbers into a readable range string."""
+        if not line_numbers:
+            return "unknown"
+        
+        if len(line_numbers) == 1:
+            return str(line_numbers[0])
+        
+        # Sort and group consecutive numbers
+        sorted_lines = sorted(set(line_numbers))
+        if len(sorted_lines) <= 3:
+            return ", ".join(map(str, sorted_lines))
+        
+        # For many lines, show range
+        return f"{min(sorted_lines)}-{max(sorted_lines)} ({len(sorted_lines)} lines)"
