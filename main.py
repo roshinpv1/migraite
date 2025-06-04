@@ -71,6 +71,28 @@ def create_shared_state(args):
         "detailed_analysis": not args.quick_analysis,
     }
     
+    # Derive project name from repository URL or directory path
+    if args.repo:
+        # Extract project name from GitHub URL
+        project_name = args.repo.split("/")[-1].replace(".git", "")
+        if args.verbose:
+            vlogger = get_verbose_logger()
+            vlogger.debug(f"Derived project name from repo URL: {project_name}")
+    elif args.dir:
+        # Extract project name from directory path
+        project_name = os.path.basename(os.path.abspath(args.dir))
+        if args.verbose:
+            vlogger = get_verbose_logger()
+            vlogger.debug(f"Derived project name from directory: {project_name}")
+    else:
+        # Fallback project name
+        project_name = "unknown_project"
+        if args.verbose:
+            vlogger = get_verbose_logger()
+            vlogger.warning("No repository or directory specified, using fallback project name")
+    
+    shared["project_name"] = project_name
+    
     # Auto-configure for large repositories if directory analysis shows many files
     if args.dir and not args.max_files:
         # Quick scan to estimate repository size
