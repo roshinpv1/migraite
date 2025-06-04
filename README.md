@@ -105,8 +105,14 @@ An intelligent tool that analyzes Spring Framework projects and provides compreh
 # Analyze local Spring project
 python main.py --dir /path/to/spring/project
 
-# Analyze GitHub repository
+# Analyze GitHub repository (default branch)
 python main.py --repo https://github.com/user/spring-project --github-token YOUR_TOKEN
+
+# Analyze specific branch
+python main.py --repo https://github.com/user/spring-project --source-branch develop --github-token YOUR_TOKEN
+
+# Analyze feature branch
+python main.py --repo https://github.com/user/spring-project --source-branch feature/spring-upgrade --github-token YOUR_TOKEN
 ```
 
 ### Large Repository Optimization
@@ -137,6 +143,7 @@ python main.py --dir /path/to/project --apply-changes --git-integration --parall
 --repo URL                    # GitHub repository URL
 --dir PATH                    # Local directory path
 --github-token TOKEN          # GitHub personal access token
+--source-branch BRANCH        # Specific branch to analyze (default: repository's default branch)
 ```
 
 ### **Performance Options**

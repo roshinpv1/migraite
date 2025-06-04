@@ -40,6 +40,7 @@ def create_shared_state(args):
         "repo_url": args.repo,
         "local_dir": args.dir,
         "github_token": args.github_token,
+        "source_branch": args.source_branch,
         
         # File filtering patterns - optimized for Spring projects
         "include_patterns": [
@@ -316,17 +317,20 @@ Examples:
   # Analyze local Spring project with verbose output
   python main.py --dir /path/to/spring/project --verbose
 
-  # Analyze with change application and detailed logging
-  python main.py --dir /path/to/spring/project --apply-changes --verbose
+  # Analyze GitHub repository with specific branch
+  python main.py --repo https://github.com/user/spring-project --source-branch develop --verbose
 
-  # Large repository with optimizations and verbose mode
-  python main.py --dir /path/to/large/project --parallel --max-files 500 --batch-size 20 --verbose
+  # Analyze with change application and specific branch
+  python main.py --repo https://github.com/user/repo --source-branch feature/spring-upgrade --apply-changes --verbose
 
-  # Quick analysis with performance monitoring and verbose output
-  python main.py --dir /path/to/project --quick-analysis --max-workers 8 --verbose
+  # Large repository with optimizations and branch specification
+  python main.py --repo https://github.com/user/large-project --source-branch main --parallel --max-files 500 --batch-size 20 --verbose
 
-  # Full analysis with Git integration and verbose logging
-  python main.py --dir /path/to/project --apply-changes --git-integration --verbose
+  # Private repository with token and branch
+  python main.py --repo https://github.com/company/private-repo --source-branch release/v2.0 --github-token YOUR_TOKEN --verbose
+
+  # Full analysis with Git integration and branch
+  python main.py --repo https://github.com/user/project --source-branch develop --apply-changes --git-integration --verbose
         """
     )
     
@@ -340,6 +344,8 @@ Examples:
     # Basic settings
     parser.add_argument("--github-token", type=str,
                        help="GitHub personal access token (for private repos)")
+    parser.add_argument("--source-branch", type=str,
+                       help="Git branch to fetch and analyze from the repository (default: repository's default branch)")
     parser.add_argument("-o", "--output", type=str, default="./migration_analysis",
                        help="Output directory for reports (default: ./migration_analysis)")
     
@@ -392,8 +398,12 @@ Examples:
     
     if args.repo:
         print(f"📂 Repository: {args.repo}")
+        if args.source_branch:
+            print(f"🌿 Source Branch: {args.source_branch}")
         if args.verbose:
             vlogger.debug(f"Repository URL: {args.repo}")
+            if args.source_branch:
+                vlogger.debug(f"Source branch: {args.source_branch}")
     else:
         print(f"📁 Directory: {args.dir}")
         if args.verbose:

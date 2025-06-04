@@ -31,51 +31,23 @@ class FetchRepo(Node):
         vlogger = get_verbose_logger()
         
         if shared.get("verbose_mode"):
-            vlogger.step("Preparing repository fetch configuration")
+            vlogger.step("Preparing repository fetch operation")
         
-        repo_url = shared.get("repo_url")
-        local_dir = shared.get("local_dir")
-        project_name = shared.get("project_name")
-
-        if not project_name:
-            # Basic name derivation from URL or directory
-            if repo_url:
-                project_name = repo_url.split("/")[-1].replace(".git", "")
-            else:
-                project_name = os.path.basename(os.path.abspath(local_dir))
-            shared["project_name"] = project_name
-            
-            if shared.get("verbose_mode"):
-                vlogger.debug(f"Derived project name: {project_name}")
-
-        # Get file patterns directly from shared
-        include_patterns = shared["include_patterns"]
-        exclude_patterns = shared["exclude_patterns"]
-        max_file_size = shared["max_file_size"]
-        
-        # Performance optimization settings
-        enable_optimization = shared.get("enable_optimization", True)
-        max_files_for_analysis = shared.get("max_files_for_analysis", None)
-
-        if shared.get("verbose_mode"):
-            vlogger.debug(f"File patterns: {len(include_patterns)} include, {len(exclude_patterns)} exclude")
-            vlogger.debug(f"Max file size: {max_file_size / 1024 / 1024:.1f} MB")
-            vlogger.debug(f"Optimization enabled: {enable_optimization}")
-            if max_files_for_analysis:
-                vlogger.debug(f"File limit: {max_files_for_analysis} files")
-
-        return {
-            "repo_url": repo_url,
-            "local_dir": local_dir,
-            "token": shared.get("github_token"),
-            "include_patterns": include_patterns,
-            "exclude_patterns": exclude_patterns,
-            "max_file_size": max_file_size,
+        prep_data = {
+            "repo_url": shared.get("repo_url"),
+            "local_dir": shared.get("local_dir"),
+            "token": shared.get("github_token") or os.environ.get("GITHUB_TOKEN"),
+            "source_branch": shared.get("source_branch"),
+            "include_patterns": shared.get("include_patterns", []),
+            "exclude_patterns": shared.get("exclude_patterns", []),
+            "max_file_size": shared.get("max_file_size", 1024 * 1024),  # 1MB default
             "use_relative_paths": True,
-            "enable_optimization": enable_optimization,
-            "max_files_for_analysis": max_files_for_analysis,
+            "enable_optimization": shared.get("enable_optimization", True),
+            "max_files_for_analysis": shared.get("max_files_for_analysis"),
             "verbose_mode": shared.get("verbose_mode", False)
         }
+        
+        return prep_data
 
     def exec(self, prep_res):
         monitor = get_performance_monitor()
@@ -90,6 +62,8 @@ class FetchRepo(Node):
             print(f"Crawling repository: {prep_res['repo_url']}...")
             if prep_res["verbose_mode"]:
                 vlogger.debug(f"Fetching from GitHub: {prep_res['repo_url']}")
+                if prep_res["source_branch"]:
+                    vlogger.debug(f"Target branch: {prep_res['source_branch']}")
                 if prep_res["token"]:
                     vlogger.debug("Using authentication token")
                 else:
@@ -98,6 +72,7 @@ class FetchRepo(Node):
             result = crawl_github_files(
                 repo_url=prep_res["repo_url"],
                 token=prep_res["token"],
+                branch=prep_res["source_branch"],
                 include_patterns=prep_res["include_patterns"],
                 exclude_patterns=prep_res["exclude_patterns"],
                 max_file_size=prep_res["max_file_size"],

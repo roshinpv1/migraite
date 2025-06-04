@@ -1,5 +1,31 @@
 # Git Branch Name Specification Guide
 
+## 🌿 **Important: Source Branch vs Migration Branch**
+
+There are **two different branch concepts** in this Spring migration tool:
+
+### **📥 Source Branch** (`--source-branch`)
+- **What it is**: The branch you want to **fetch and analyze** from the GitHub repository
+- **When to use**: When the code you want to migrate is not on the default branch
+- **Example**: `--source-branch develop` to analyze the develop branch of the repository
+
+### **📤 Migration Branch** (`--git-branch`)  
+- **What it is**: The branch that will be **created in your migration workspace** for the changes
+- **When to use**: When you want to organize your migration work in a specific branch
+- **Example**: `--git-branch feature/spring-6-upgrade` to create a feature branch for your changes
+
+### **🔄 Complete Example**
+```bash
+# Analyze the 'develop' branch from GitHub and create migration changes in a 'feature/spring-6' branch
+python main.py \
+  --repo https://github.com/company/spring-app \
+  --source-branch develop \
+  --git-integration \
+  --git-branch feature/spring-6-migration
+```
+
+---
+
 ## 🌿 **Multiple Ways to Specify Git Branch Names**
 
 You can specify custom git branch names for your Spring migration in several ways:

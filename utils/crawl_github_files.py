@@ -39,6 +39,7 @@ def clear_git_credentials(repo_url: str):
 def crawl_github_files(
     repo_url: str,
     token: str = None,
+    branch: str = None,
     include_patterns: list = None,
     exclude_patterns: list = None,
     max_file_size: int = 100000,
@@ -53,6 +54,7 @@ def crawl_github_files(
     Args:
         repo_url: GitHub repository URL
         token: GitHub API token (optional)
+        branch: Specific branch to clone and analyze (optional, defaults to repository's default branch)
         include_patterns: List of glob patterns to include
         exclude_patterns: List of glob patterns to exclude
         max_file_size: Maximum file size in bytes
@@ -69,6 +71,8 @@ def crawl_github_files(
     try:
         print(f"Cloning repository to temporary directory: {temp_dir}")
         print(f"Repository URL: {repo_url}")
+        if branch:
+            print(f"Target branch: {branch}")
         print(f"Include patterns: {include_patterns}")
         print(f"Exclude patterns: {exclude_patterns}")
         
@@ -180,6 +184,37 @@ def crawl_github_files(
             
         print("Repository cloned successfully")
         
+        # Checkout specific branch if requested
+        if branch:
+            try:
+                print(f"Checking out branch: {branch}")
+                repo.git.checkout(branch)
+                print(f"Successfully switched to branch: {branch}")
+            except git.exc.GitCommandError as branch_error:
+                # Try to checkout as a remote branch if local checkout fails
+                try:
+                    print(f"Local branch '{branch}' not found, trying remote branch...")
+                    repo.git.checkout(f"origin/{branch}")
+                    print(f"Successfully switched to remote branch: origin/{branch}")
+                except git.exc.GitCommandError as remote_error:
+                    print(f"❌ Failed to checkout branch '{branch}':")
+                    print(f"   Local checkout error: {branch_error}")
+                    print(f"   Remote checkout error: {remote_error}")
+                    
+                    # List available branches for user reference
+                    try:
+                        branches = repo.git.branch('-a').split('\n')
+                        available_branches = [b.strip().replace('* ', '').replace('remotes/origin/', '') 
+                                            for b in branches if b.strip() and not b.strip().startswith('HEAD')]
+                        available_branches = list(set(available_branches))  # Remove duplicates
+                        print(f"   Available branches: {', '.join(available_branches[:10])}")
+                        if len(available_branches) > 10:
+                            print(f"   ... and {len(available_branches) - 10} more")
+                    except:
+                        print("   Could not list available branches")
+                    
+                    raise Exception(f"Branch '{branch}' not found in repository. Please check the branch name and try again.")
+        
         # If a specific path within the repo was specified, adjust the directory to scan
         scan_dir = temp_dir
         if target_path:
@@ -201,6 +236,8 @@ def crawl_github_files(
         
         # Add repository information to the result
         result["repo_name"] = os.path.basename(repo_url.rstrip('/'))
+        if branch:
+            result["branch"] = branch
         if target_path:
             result["target_path"] = target_path
             
@@ -221,11 +258,13 @@ if __name__ == "__main__":
               "To access private repos, set the environment variable or pass the token explicitly.")
     
     repo_url = "https://github.com/pydantic/pydantic"
+    target_branch = "main"  # Specify branch to analyze
     
-    # Example: Get Python and Markdown files, but exclude test files
+    # Example: Get Python and Markdown files from specific branch, but exclude test files
     result = crawl_github_files(
         repo_url, 
         token=github_token,
+        branch=target_branch,  # Analyze specific branch
         max_file_size=1 * 1024 * 1024,  # 1 MB in bytes
         use_relative_paths=True,  # Enable relative paths
         include_patterns={"*.py", "*.md"},  # Include Python and Markdown files
