@@ -79,7 +79,7 @@ def crawl_local_files(
     for filepath in all_files:
         relpath = os.path.relpath(filepath, directory) if use_relative_paths else filepath
         processed_files += 1
-
+        
         # --- Exclusion check ---
         excluded = False
         exclusion_reason = None

@@ -368,7 +368,7 @@ Focus on providing actionable insights for large-scale migration planning."""
         prep_res = (context, file_listing, project_name, use_cache)
         
         # Use the existing comprehensive prompt
-        prompt = f"""# System Prompt: Spring 6 Migration – Full Codebase Analysis
+        prompt = """# System Prompt: Spring 6 Migration – Full Codebase Analysis
 
 You are an expert in Java, Spring Framework, Jakarta EE, and enterprise application modernization. Analyze the Java codebase for project `{project_name}` to determine what changes are needed for Spring Framework 6 migration.
 
@@ -399,32 +399,94 @@ Analyze the ACTUAL codebase and provide REALISTIC recommendations based on what 
 - Evaluate actual usage of `@Configuration`, `@ComponentScan`, `@Profile`, `@Conditional`
 - Identify deprecated constructs that are actually present in the codebase
 
-## 4. Spring Security Migration
+## 4. **JAVAX TO JAKARTA MIGRATION - TOP PRIORITY**
+
+⚠️ **CRITICAL MIGRATION REQUIREMENT**: ALL javax.* imports MUST be updated to jakarta.* equivalents
+
+### Primary javax.* packages requiring immediate update:
+- **javax.persistence.*** → **jakarta.persistence.*** (JPA/Hibernate)
+- **javax.validation.*** → **jakarta.validation.*** (Bean Validation)
+- **javax.servlet.*** → **jakarta.servlet.*** (Servlet API)
+- **javax.jms.*** → **jakarta.jms.*** (Java Message Service)
+- **javax.ejb.*** → **jakarta.ejb.*** (Enterprise JavaBeans)
+- **javax.inject.*** → **jakarta.inject.*** (Dependency Injection)
+- **javax.ws.rs.*** → **jakarta.ws.rs.*** (JAX-RS)
+- **javax.json.*** → **jakarta.json.*** (JSON-B)
+- **javax.security.*** → **jakarta.security.*** (Security)
+
+### MANDATORY javax scanning requirements:
+1. **Scan ALL .java files** for javax.* imports
+2. **Scan ALL XML configuration** for javax references
+3. **Scan ALL annotation usage** with javax packages
+4. **Check ALL test files** for javax.* imports
+5. **Verify ALL third-party dependencies** for javax compatibility
+
+## 5. Jakarta Namespace Impact Analysis
+
+REQUIRED: Provide comprehensive javax→jakarta mapping for ALL actual usages found:
+
+```json
+"jakarta_migration": {{
+  "javax_usages": [
+    "List ALL actual javax.* imports found in codebase",
+    "Include file paths and line numbers where possible"
+  ],
+  "mapping_required": {{
+    "javax.persistence.Entity": "jakarta.persistence.Entity",
+    "javax.validation.constraints.NotNull": "jakarta.validation.constraints.NotNull",
+    "javax.servlet.http.HttpServletRequest": "jakarta.servlet.http.HttpServletRequest"
+  }},
+  "incompatible_libraries": [
+    "List dependencies that still use javax and need updates"
+  ]
+}}
+```
+
+**SCAN PRIORITY**: Focus heavily on javax.* usage detection - this is the most common breaking change
+
+## Analysis Requirements:
+
+Analyze the ACTUAL codebase and provide REALISTIC recommendations based on what you observe. Do not make assumptions about versions or provide generic recommendations.
+
+## 1. Framework and Dependency Audit
+- Identify the ACTUAL current Spring and Spring Boot versions from the build files
+- Detect deprecated or removed Spring modules and APIs that are actually present in the code
+- Audit third-party libraries based on what is actually declared in build files
+- **⚠️ FLAG ALL ACTUAL javax.* API USAGE found in the codebase** - THIS IS CRITICAL
+
+## 2. **COMPREHENSIVE JAVAX TO JAKARTA ANALYSIS** ⭐
+- **Search exhaustively** for ALL javax.* packages in the entire codebase
+- Map EVERY javax.* usage to its jakarta.* equivalent based on actual findings
+- Assess classes, annotations, XML configs, and property files for javax references
+- Identify incompatible external libraries that still use javax
+- **This is typically 60-80% of migration effort - be thorough**
+
+## 6. Spring Security Migration
 - Detect actual usage of `WebSecurityConfigurerAdapter` in the codebase
 - Identify how authentication, authorization, CORS, CSRF are actually implemented
 - Recommend changes based on the actual security configuration found
 
-## 5. Spring Data and JPA
+## 7. Spring Data and JPA
 - Audit actual use of `javax.persistence.*` and related annotations in the code
 - Review actual repository interfaces and custom queries present
 - Check actual Hibernate usage and version from build files
 
-## 6. Web Layer (Spring MVC / WebFlux)
+## 8. Web Layer (Spring MVC / WebFlux)
 - Identify actual controllers, `@RequestMapping` methods, interceptors found in code
 - Detect actual servlet-based components in the codebase
 - Highlight APIs that are actually used and need migration
 
-## 7. Testing Analysis
+## 9. Testing Analysis
 - Review actual tests using Spring Test, JUnit that exist in the codebase
 - Detect actual `javax.*` usage in test code
 - Identify actual testing patterns that need updates
 
-## 8. Build Tooling
+## 10. Build Tooling
 - Audit actual Maven or Gradle setup from the build files provided
 - Validate actual plugin versions and compiler settings
 - Check actual build configuration compatibility
 
-## 9. Output Requirements
+## 11. Output Requirements
 
 Your output must be in valid JSON format. Base all recommendations on the ACTUAL codebase analysis:
 
@@ -535,7 +597,11 @@ IMPORTANT:
 - Focus on actual code patterns, imports, and configurations found
 - Provide specific line-by-line analysis where possible
 
-Analyze the codebase thoroughly and provide the complete JSON response based on actual findings."""
+Analyze the codebase thoroughly and provide the complete JSON response based on actual findings.""".format(
+            project_name=project_name,
+            context=context,
+            file_listing=file_listing
+        )
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -942,17 +1008,34 @@ class MigrationPlanGenerator(Node):
         prompt = f"""
 You are analyzing a Spring Boot project for migration from version 2.x to 3.x.
 
+## 🚨 **CRITICAL JAVAX TO JAKARTA MIGRATION PRIORITY** 🚨
+
+**The #1 migration priority is javax.* → jakarta.* namespace changes. This affects 60-80% of Spring 6 migration effort.**
+
 Based on the following analysis results, create a comprehensive, actionable migration plan:
 
 **Project:** {project_name}
 **Analysis Results:**
 {json.dumps(analysis, indent=2)}
 
-**IMPORTANT:** You MUST include ALL required fields in your JSON response:
-- migration_strategy (with approach, rationale, estimated_timeline, team_size_recommendation)
-- phase_breakdown (array of phases with tasks, risks, success criteria)
-- automation_recommendations (array of automation tools and guidance)
-- testing_strategy (with unit_tests, integration_tests, regression_testing)
+## **JAVAX TO JAKARTA MIGRATION REQUIREMENTS**
+
+### **Top Priority javax→jakarta mappings that MUST be in your plan:**
+- **javax.persistence.*** → **jakarta.persistence.*** (JPA/Hibernate)
+- **javax.validation.*** → **jakarta.validation.*** (Bean Validation)
+- **javax.servlet.*** → **jakarta.servlet.*** (Servlet API)
+- **javax.inject.*** → **jakarta.inject.*** (Dependency Injection)
+- **javax.jms.*** → **jakarta.jms.*** (Java Message Service)
+- **javax.ejb.*** → **jakarta.ejb.*** (Enterprise JavaBeans)
+- **javax.ws.rs.*** → **jakarta.ws.rs.*** (JAX-RS)
+- **javax.json.*** → **jakarta.json.*** (JSON-B)
+
+### **MANDATORY javax→jakarta migration phases:**
+1. **Phase 1: Comprehensive javax.* Scan** - Identify ALL javax imports in codebase
+2. **Phase 2: javax→jakarta Import Replacement** - Systematic replacement of imports
+3. **Phase 3: javax→jakarta Testing** - Verify all replacements work correctly
+
+**IMPORTANT:** You MUST include ALL required fields in your JSON response AND prioritize javax→jakarta migration in your phase breakdown.
 
 Generate a detailed migration plan based on the actual findings from the analysis.
 
@@ -965,75 +1048,119 @@ Generate a detailed migration plan based on the actual findings from the analysi
 - Include time for testing, validation, and deployment
 - Account for parallel development work
 - Consider team availability and other project commitments
+- **javax→jakarta changes typically require 30-50% of migration time**
 
-**REQUIRED JSON OUTPUT FORMAT - Include ALL sections:**
+**REQUIRED JSON OUTPUT FORMAT - Include ALL sections with javax→jakarta focus:**
 ```json
 {{
   "migration_strategy": {{
     "approach": "Big Bang|Phased|Hybrid",
-    "rationale": "Explanation of chosen approach based on project size and risk",
+    "rationale": "Explanation focusing on javax→jakarta migration complexity and approach",
     "estimated_timeline": "X weeks|X months (be specific and realistic)",
-    "team_size_recommendation": "X developers (1-5 max)"
+    "team_size_recommendation": "X developers (1-5 max)",
+    "javax_migration_priority": "HIGH - 60-80% of migration effort"
   }},
   "phase_breakdown": [
     {{
       "phase": 1,
-      "name": "string",
-      "description": "string",
+      "name": "javax→jakarta Comprehensive Scan and Analysis",
+      "description": "Identify all javax.* imports and dependencies requiring migration",
       "duration": "X days/weeks",
-      "deliverables": [],
+      "deliverables": ["Complete javax.* inventory", "jakarta.* mapping plan"],
       "tasks": [
         {{
-          "task_id": "string",
-          "title": "string", 
-          "description": "string",
-          "complexity": "Low|Medium|High",
-          "estimated_hours": "number (8-40 hours per task)",
+          "task_id": "javax-scan",
+          "title": "Comprehensive javax.* Import Scan", 
+          "description": "Scan ALL Java files for javax.* imports and create mapping to jakarta.*",
+          "complexity": "Medium",
+          "estimated_hours": "8-16 hours per 100 files",
           "dependencies": [],
-          "automation_potential": "High|Medium|Low",
-          "tools_required": []
+          "automation_potential": "High",
+          "tools_required": ["Migration scripts", "IDE find/replace"]
+        }},
+        {{
+          "task_id": "jakarta-dependency-analysis",
+          "title": "Jakarta EE Dependency Analysis",
+          "description": "Analyze third-party dependencies for javax vs jakarta compatibility",
+          "complexity": "High",
+          "estimated_hours": "16-24 hours",
+          "dependencies": ["javax-scan"],
+          "automation_potential": "Medium",
+          "tools_required": ["Dependency analysis tools"]
         }}
       ],
-      "risks": [],
-      "success_criteria": []
+      "risks": ["Missing javax imports", "Incompatible dependencies"],
+      "success_criteria": ["100% javax imports identified", "jakarta mapping complete"]
+    }},
+    {{
+      "phase": 2,
+      "name": "javax→jakarta Import Migration",
+      "description": "Systematic replacement of javax.* imports with jakarta.* equivalents",
+      "duration": "X days/weeks", 
+      "deliverables": ["All javax imports replaced", "Compilation success"],
+      "tasks": [
+        {{
+          "task_id": "javax-to-jakarta-replacement",
+          "title": "Automated javax→jakarta Import Replacement",
+          "description": "Replace all javax.* imports with jakarta.* using automated tools",
+          "complexity": "Medium",
+          "estimated_hours": "4-8 hours per 100 files",
+          "dependencies": ["javax-scan"],
+          "automation_potential": "High",
+          "tools_required": ["Migration scripts", "Find/replace tools"]
+        }}
+      ],
+      "risks": ["Breaking changes", "Runtime errors"],
+      "success_criteria": ["All imports replaced", "Clean compilation"]
     }}
   ],
   "automation_recommendations": [
     {{
-      "tool": "string",
-      "purpose": "string",
-      "setup_instructions": "string",
-      "coverage": "percentage of issues it can handle"
+      "tool": "javax→jakarta Migration Scripts",
+      "purpose": "Automate javax.* to jakarta.* import replacements",
+      "setup_instructions": "Use IDE find/replace or custom scripts for bulk replacement",
+      "coverage": "95% of javax→jakarta import changes can be automated"
+    }},
+    {{
+      "tool": "Spring Boot 3.x Migration Plugin",
+      "purpose": "Handle dependency updates and configuration changes", 
+      "setup_instructions": "Configure Maven/Gradle plugins for automated dependency updates",
+      "coverage": "80% of dependency and configuration updates"
     }}
   ],
   "manual_changes": [
     {{
-      "category": "string",
-      "changes": [],
-      "rationale": "why manual changes are needed"
+      "category": "javax→jakarta Migration",
+      "changes": ["Complex annotation usages", "Third-party library integrations"],
+      "rationale": "Some javax→jakarta changes require manual review for context-specific updates"
     }}
   ],
   "testing_strategy": {{
-    "unit_tests": "approach for unit test migration",
-    "integration_tests": "approach for integration test migration", 
-    "regression_testing": "strategy for ensuring no functionality is broken"
+    "unit_tests": "Update test imports from javax.* to jakarta.*, verify all test annotations work",
+    "integration_tests": "Test jakarta.* integrations thoroughly, especially JPA and validation", 
+    "regression_testing": "Comprehensive testing to ensure javax→jakarta changes don't break functionality"
   }},
   "rollback_plan": {{
-    "triggers": ["conditions that would require rollback"],
-    "steps": ["detailed rollback procedures"],
-    "data_considerations": "any data migration rollback needs"
+    "triggers": ["javax→jakarta breaking changes", "Runtime failures", "Performance issues"],
+    "steps": ["Revert javax→jakarta changes", "Restore original dependencies", "Validate rollback"],
+    "data_considerations": "Ensure javax→jakarta changes don't affect data persistence"
   }},
   "success_metrics": [
     {{
-      "metric": "string",
-      "target": "string",
-      "measurement_method": "string"
+      "metric": "javax→jakarta Import Migration",
+      "target": "100% of javax.* imports replaced with jakarta.*",
+      "measurement_method": "Code scan for remaining javax.* imports"
+    }},
+    {{
+      "metric": "Application Functionality",
+      "target": "All features work with jakarta.* dependencies",
+      "measurement_method": "Comprehensive test suite execution"
     }}
   ]
 }}
 ```
 
-**CRITICAL:** Return ONLY the JSON object. Do not include any explanatory text before or after the JSON. Ensure all required top-level fields are present: migration_strategy, phase_breakdown, automation_recommendations, testing_strategy."""
+**CRITICAL:** Return ONLY the JSON object. Do not include any explanatory text before or after the JSON. Ensure javax→jakarta migration is prominently featured in phases and tasks."""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -1315,7 +1442,7 @@ Generate a detailed migration plan based on the actual findings from the analysi
             "rollback_plan": {
                 "triggers": ["Critical test failures", "Performance degradation", "Production issues"],
                 "steps": ["Stop deployment", "Restore from backup/previous version", "Verify system stability", "Document issues"],
-                "data_considerations": "Ensure database schema compatibility, backup configuration files"
+                "data_considerations": "Ensure javax→jakarta changes don't affect data persistence"
             },
             "success_metrics": [
                 {
@@ -1887,7 +2014,7 @@ esac
         os.chmod(script_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
         
         print(f"   Created git workflow script: git-migration-workflow.sh")
-    
+
     def post(self, shared, prep_res, exec_res):
         shared["git_info"] = exec_res
         return "default"
@@ -2036,6 +2163,18 @@ class MigrationChangeGenerator(Node):
             print(f"     Skipping non-migration-relevant file: {file_path}")
             return self._get_empty_changes()
         
+        # **NEW: Check Java version compatibility FIRST**
+        if file_path.endswith(('pom.xml', '.gradle', '.gradle.kts')):
+            java_version_issues = self._check_java_version_compatibility(content, file_path)
+            if java_version_issues:
+                # Return Java version issues as high-priority changes
+                return java_version_issues
+        
+        # **NEW: Pre-filter files that don't actually need changes**
+        if not self._file_needs_migration_analysis(file_path, content):
+            # Silently skip - no need to report files that don't need changes
+            return self._get_empty_changes()
+        
         # Create context from the migration analysis
         analysis_context = self._create_analysis_context(analysis)
         
@@ -2043,9 +2182,9 @@ class MigrationChangeGenerator(Node):
         clean_content = self._prepare_file_content_for_llm(content, file_path)
         
         # Enhanced prompt with better JSON guidance
-        prompt = f"""# Spring Migration Change Analysis
+        prompt = f"""# Spring Migration Change Analysis - JAVAX TO JAKARTA PRIORITY
 
-You are analyzing a file from project `{project_name}` for Spring 6 migration. Based on the overall migration analysis and the specific file content, generate precise, actionable changes.
+You are analyzing a file from project `{project_name}` for Spring 6 migration. **PRIMARY FOCUS: JAVAX TO JAKARTA MIGRATION**
 
 ## Overall Migration Analysis Context:
 {analysis_context}
@@ -2058,9 +2197,172 @@ You are analyzing a file from project `{project_name}` for Spring 6 migration. B
 {clean_content}
 ```
 
+## 🚨 **CRITICAL JAVAX TO JAKARTA REQUIREMENTS** 🚨
+
+### **HIGHEST PRIORITY: javax.* → jakarta.* Migration**
+
+**YOU MUST SCAN FOR AND UPDATE ALL javax.* IMPORTS**
+
+#### **Required javax→jakarta mappings (scan for these exactly):**
+
+**JPA/Persistence (Most Common):**
+- `javax.persistence.Entity` → `jakarta.persistence.Entity`
+- `javax.persistence.Id` → `jakarta.persistence.Id`
+- `javax.persistence.GeneratedValue` → `jakarta.persistence.GeneratedValue`
+- `javax.persistence.Column` → `jakarta.persistence.Column`
+- `javax.persistence.Table` → `jakarta.persistence.Table`
+- `javax.persistence.JoinColumn` → `jakarta.persistence.JoinColumn`
+- `javax.persistence.OneToMany` → `jakarta.persistence.OneToMany`
+- `javax.persistence.ManyToOne` → `jakarta.persistence.ManyToOne`
+- `javax.persistence.OneToOne` → `jakarta.persistence.OneToOne`
+- `javax.persistence.ManyToMany` → `jakarta.persistence.ManyToMany`
+
+**Validation (Very Common):**
+- `javax.validation.constraints.NotNull` → `jakarta.validation.constraints.NotNull`
+- `javax.validation.constraints.NotEmpty` → `jakarta.validation.constraints.NotEmpty`
+- `javax.validation.constraints.NotBlank` → `jakarta.validation.constraints.NotBlank`
+- `javax.validation.constraints.Size` → `jakarta.validation.constraints.Size`
+- `javax.validation.constraints.Email` → `jakarta.validation.constraints.Email`
+- `javax.validation.Valid` → `jakarta.validation.Valid`
+
+**Servlet API (Common in Controllers):**
+- `javax.servlet.http.HttpServletRequest` → `jakarta.servlet.http.HttpServletRequest`
+- `javax.servlet.http.HttpServletResponse` → `jakarta.servlet.http.HttpServletResponse`
+- `javax.servlet.ServletException` → `jakarta.servlet.ServletException`
+
+**Dependency Injection:**
+- `javax.inject.Inject` → `jakarta.inject.Inject`
+- `javax.inject.Named` → `jakarta.inject.Named`
+
+**⚠️ SCAN THE ACTUAL FILE CONTENT FOR THESE EXACT IMPORT PATTERNS ⚠️**
+
+### **Step 1: MANDATORY javax.* Scan**
+1. Look for ANY line starting with `import javax.`
+2. For EACH javax.* import found, add it to javax_to_jakarta array
+3. Map it to corresponding jakarta.* package
+4. Mark as "automatic": true (safe replacement)
+
+### **Step 2: Look for javax.* in annotations and code**
+1. Check for javax.* references in annotations like `@javax.persistence.Entity`
+2. Check for javax.* in fully qualified class names in code
+3. Check for javax.* in comments or strings (for reference updates)
+
+## CRITICAL VALIDATION RULES - You MUST follow these:
+
+### Rule 1: File Type Restrictions
+- **Java source files (.java)**: FOCUS ON javax→jakarta imports, Spring annotations, code changes
+- **Build files (pom.xml, .gradle)**: ONLY dependency versions, plugin versions, properties
+- **Config files (.properties, .yml)**: ONLY configuration property changes
+- **NEVER suggest version updates for Java source files**
+- **NEVER suggest import changes for build files**
+
+### Rule 2: Content Verification Required
+- **ONLY suggest changes for content that ACTUALLY EXISTS in the file**
+- **Before suggesting javax.* → jakarta.* change, VERIFY the javax import exists in the file content above**
+- **Before suggesting version updates, VERIFY the version number exists in the file**
+- **Do NOT make assumptions about content not shown**
+
+### Rule 3: Change Type Validation
+- **javax_to_jakarta**: For .java files with actual javax.* imports (TOP PRIORITY)
+- **spring_security_version_update**: ONLY for pom.xml/build.gradle files with actual Spring Security dependencies
+- **import_replacement**: ONLY for .java files with actual imports
+- **dependency_updates**: ONLY for build files (pom.xml, .gradle)
+
+## ENHANCED Migration Guidelines:
+
+### For Java Source Files ONLY:
+
+#### 1. **🎯 PRIORITY #1: Jakarta EE Migration (javax.* → jakarta.*)**
+**SCAN EXHAUSTIVELY FOR THESE javax.* IMPORTS:**
+- **JPA/Hibernate**: javax.persistence.* → jakarta.persistence.*
+- **Validation**: javax.validation.* → jakarta.validation.*
+- **Servlet API**: javax.servlet.* → jakarta.servlet.*
+- **JMS**: javax.jms.* → jakarta.jms.*
+- **EJB**: javax.ejb.* → jakarta.ejb.*
+- **CDI**: javax.inject.* → jakarta.inject.*
+- **JAX-RS**: javax.ws.rs.* → jakarta.ws.rs.*
+- **JSON-B**: javax.json.* → jakarta.json.*
+- **Security**: javax.security.* → jakarta.security.*
+
+**⚠️ EVERY javax.* import MUST be replaced - this is not optional**
+
+#### 2. JUnit 4 → JUnit 5 Migration
+- **@Test**: Usually stays the same, but import changes
+- **@Before** → **@BeforeEach**
+- **@After** → **@AfterEach**
+- **@BeforeClass** → **@BeforeAll**
+- **@AfterClass** → **@AfterAll**
+- **@Ignore** → **@Disabled**
+- **@RunWith** → **@ExtendWith**
+- **@Rule** → **@RegisterExtension** (context-dependent)
+
+#### 3. Spring Test Framework Updates
+- **@RunWith(SpringRunner.class)** → **@ExtendWith(SpringExtension.class)**
+- **@TestMethodOrder**, **@TestInstance** may need updates
+- **MockitoJUnitRunner** → **MockitoExtension**
+
+#### 4. Spring Security Configuration Updates
+- **WebSecurityConfigurerAdapter** → **SecurityFilterChain** bean
+- **authorizeRequests()** → **authorizeHttpRequests()**
+- **antMatchers()** → **requestMatchers()**
+- **@EnableGlobalMethodSecurity** → **@EnableMethodSecurity**
+
+### For Build Files (pom.xml, .gradle) ONLY:
+- Update Spring Boot/Security dependency versions (ONLY if they exist in file)
+- Update Java version if specified
+- Update JUnit version: 4.x → 5.x
+- Update Mockito version for compatibility
+- **DO NOT suggest import changes in build files**
+
+### For Configuration Files ONLY:
+- Update property names/values
+- Spring Security property updates
+- **DO NOT suggest code or dependency changes**
+
+## **EXAMPLE CORRECT javax.* MIGRATION:**
+
+**If you find this in the file:**
+```java
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.validation.constraints.NotNull;
+```
+
+**YOU MUST INCLUDE THESE CHANGES:**
+```json
+{{
+  "javax_to_jakarta": [
+    {{
+      "file": "{{file_path}}",
+      "type": "import_replacement",
+      "from": "javax.persistence.Entity",
+      "to": "jakarta.persistence.Entity",
+      "automatic": true,
+      "description": "JPA: javax.persistence → jakarta.persistence"
+    }},
+    {{
+      "file": "{{file_path}}",
+      "type": "import_replacement", 
+      "from": "javax.persistence.Id",
+      "to": "jakarta.persistence.Id",
+      "automatic": true,
+      "description": "JPA: javax.persistence → jakarta.persistence"
+    }},
+    {{
+      "file": "{{file_path}}",
+      "type": "import_replacement",
+      "from": "javax.validation.constraints.NotNull", 
+      "to": "jakarta.validation.constraints.NotNull",
+      "automatic": true,
+      "description": "Bean Validation: javax.validation → jakarta.validation"
+    }}
+  ]
+}}
+```
+
 ## CRITICAL: You MUST respond with ONLY valid JSON - no additional text or explanations
 
-Your response must be ONLY a JSON object with this exact structure. Do not include any text before or after the JSON:
+Your response must be ONLY a JSON object with this exact structure:
 
 {{
   "javax_to_jakarta": [],
@@ -2070,49 +2372,18 @@ Your response must be ONLY a JSON object with this exact structure. Do not inclu
   "other_changes": []
 }}
 
-For each category, include objects like:
-{{
-  "file": "{file_path}",
-  "type": "import_replacement",
-  "from": "javax.package.name",
-  "to": "jakarta.package.name",
-  "description": "Short description",
-  "line_numbers": [1, 2, 3],
-  "automatic": true,
-  "explanation": "Brief reason"
-}}
-
 ## JSON Response Rules:
 1. Return ONLY the JSON object - no markdown, no explanation text
-2. Keep all string values short and simple
-3. Use only basic ASCII characters in strings
-4. If no changes needed in a category, use empty array: []
-5. Base recommendations only on what you find in the file content
-6. Include exact line numbers where possible
-7. Use "automatic": true only for simple import replacements
-8. Escape any quotes in string values
+2. **SCAN THE FILE CONTENT ABOVE FOR javax.* imports - INCLUDE ALL OF THEM**
+3. **javax_to_jakarta array is HIGHEST PRIORITY - never leave it empty if javax.* imports exist**
+4. **Verify file type matches change type (Java=imports, Build=versions)**
+5. Use only basic ASCII characters in strings
+6. If no changes needed in a category, use empty array: []
+7. **Mark javax→jakarta changes as automatic:true** (they are safe replacements)
+8. Use "automatic": false only for complex changes requiring manual review
+9. **Double-check: Did I scan for ALL javax.* imports in the file content?**
 
-## Example Response Format:
-{{
-  "javax_to_jakarta": [
-    {{
-      "file": "{file_path}",
-      "type": "import_replacement",
-      "from": "javax.persistence.Entity",
-      "to": "jakarta.persistence.Entity",
-      "description": "Replace javax persistence import",
-      "line_numbers": [3],
-      "automatic": true,
-      "explanation": "Standard javax to jakarta migration"
-    }}
-  ],
-  "spring_security_updates": [],
-  "dependency_updates": [],
-  "configuration_updates": [],
-  "other_changes": []
-}}
-
-Analyze the file and return ONLY the JSON object:"""
+**SCAN THE FILE CONTENT NOW FOR javax.* IMPORTS AND RETURN THE JSON RESPONSE:**"""
 
         try:
             response = call_llm(prompt, use_cache=(use_cache and self.cur_retry == 0))
@@ -2120,15 +2391,12 @@ Analyze the file and return ONLY the JSON object:"""
             # Enhanced debugging
             if len(response) < 50:
                 print(f"     Warning: Very short LLM response for {file_path}: {len(response)} chars")
-                print(f"     Response: {response}")
                 return self._get_empty_changes()
             
             # Clean and extract JSON from response
             json_str = self._extract_and_clean_json(response, file_path)
             if not json_str:
                 print(f"     Failed to extract JSON from LLM response for {file_path}")
-                # In debug mode, save the response for inspection
-                self._save_debug_response(file_path, response)
                 return self._get_empty_changes()
             
             # Parse JSON
@@ -2140,28 +2408,358 @@ Analyze the file and return ONLY the JSON object:"""
                 if key not in file_changes:
                     file_changes[key] = []
             
-            # Validate each change has required fields
-            for category, changes_list in file_changes.items():
-                validated_changes = []
-                for change in changes_list:
-                    if self._validate_change(change, file_path):
-                        validated_changes.append(change)
-                file_changes[category] = validated_changes
+            # **NEW: Enhanced validation that verifies changes against actual file content**
+            validated_changes = self._validate_and_filter_changes(file_changes, content, file_path)
             
-            # Report success with some statistics
-            total_changes = sum(len(changes) for changes in file_changes.values())
+            # Report success only if there are real validated changes
+            total_changes = sum(len(changes) for changes in validated_changes.values())
             if total_changes > 0:
-                print(f"     ✅ Found {total_changes} changes for {file_path}")
-            
-            return file_changes
+                print(f"     ✅ Found {total_changes} validated changes for {file_path}")
+                return validated_changes
+            else:
+                # No real changes found after validation - return empty 
+                return self._get_empty_changes()
             
         except json.JSONDecodeError as e:
             print(f"     JSON parsing error for {file_path}: {e}")
-            self._save_debug_response(file_path, response if 'response' in locals() else "No response")
             return self._get_empty_changes()
         except Exception as e:
             print(f"     Error analyzing {file_path}: {e}")
             return self._get_empty_changes()
+    
+    def _file_needs_migration_analysis(self, file_path, content):
+        """Check if a file actually needs migration analysis by looking for relevant patterns."""
+        content_lower = content.lower()
+        
+        # **ENHANCED: Check for javax imports that need migration**
+        if 'import javax.' in content:
+            return True
+        
+        # **ENHANCED: JPA/Hibernate specific patterns**
+        jpa_hibernate_patterns = [
+            'import javax.persistence.',
+            '@entity',
+            '@table',
+            '@column',
+            '@id',
+            '@generatedvalue',
+            '@onetomany',
+            '@manytoone',
+            '@joincolumn',
+            '@embeddable',
+            '@entitylisteners',
+            'hibernatetemplate',
+            'sessionfactory',
+            'jpatemplate'
+        ]
+        
+        if any(pattern in content_lower for pattern in jpa_hibernate_patterns):
+            return True
+        
+        # **ENHANCED: Spring Security patterns that might need updates**
+        spring_security_patterns = [
+            'websecurityconfigureradapter',
+            'authorizeequests()',
+            'antmatchers(',
+            'spring.security.',
+            '@enablewebsecurity',
+            '@enableglobalmethodsecurity',
+            'httpsecurity',
+            'authenticationmanager',
+            'userdetailsservice',
+            'passwordencoder',
+            'csrf()',
+            'cors()',
+            'oauth2',
+            'jwt'
+        ]
+        
+        if any(pattern in content_lower for pattern in spring_security_patterns):
+            return True
+        
+        # **NEW: JUnit 4→5 migration patterns**
+        junit_patterns = [
+            '@test',
+            '@before',
+            '@after',
+            '@beforeclass',
+            '@afterclass',
+            '@runwith',
+            '@rule',
+            '@ignore',
+            'import org.junit.test',
+            'import org.junit.before',
+            'import org.junit.after',
+            'import org.junit.assert',
+            'runner.class',
+            'springrunner',
+            'mockitojunitrunner'
+        ]
+        
+        if any(pattern in content_lower for pattern in junit_patterns):
+            return True
+        
+        # **NEW: Mockito annotation patterns**
+        mockito_patterns = [
+            '@mock',
+            '@injectmocks',
+            '@spy',
+            '@captor',
+            '@mockbean',
+            '@spybean',
+            'mockitoannotations',
+            'mockito.when',
+            'mockito.verify',
+            'argumentcaptor'
+        ]
+        
+        if any(pattern in content_lower for pattern in mockito_patterns):
+            return True
+        
+        # **ENHANCED: Spring Test patterns that need migration**
+        spring_test_patterns = [
+            '@springboottest',
+            '@datajpatest',
+            '@webmvctest',
+            '@jsontest',
+            '@restclienttest',
+            '@mockmvctest',
+            'mockmvc',
+            'testresttemplate',
+            'webapplicationcontext',
+            '@testconfiguration',
+            '@testpropertysource',
+            '@activeprofiles',
+            '@sql',
+            '@transactional',
+            'import org.springframework.test',
+            'import org.springframework.boot.test',
+            '@testmethodorder',
+            '@testinstance',
+            '@parametrizedtest'
+        ]
+        
+        if any(pattern in content_lower for pattern in spring_test_patterns):
+            return True
+        
+        # **ENHANCED: Configuration files that might need updates**
+        if file_path.endswith(('.xml', '.properties', '.yml', '.yaml')):
+            config_patterns = [
+                'javax.',
+                'spring.security',
+                'hibernate.ddl',
+                'spring.jpa',
+                'spring.test',
+                'junit.',
+                'logging.level.org.springframework',
+                'management.endpoints',
+                'spring.datasource'
+            ]
+            if any(pattern in content_lower for pattern in config_patterns):
+                return True
+        
+        # **ENHANCED: Build files (always analyze, but with enhanced patterns)**
+        if file_path.endswith(('pom.xml', '.gradle', '.gradle.kts', 'build.gradle.kts')):
+            return True
+        
+        # If no relevant patterns found, skip analysis
+        return False
+    
+    def _validate_and_filter_changes(self, file_changes, content, file_path):
+        """Validate that suggested changes actually apply to the file content."""
+        validated_changes = {
+            "javax_to_jakarta": [],
+            "spring_security_updates": [],
+            "dependency_updates": [],
+            "configuration_updates": [],
+            "other_changes": []
+        }
+        
+        for category, changes_list in file_changes.items():
+            for change in changes_list:
+                if self._validate_change_against_content(change, content, file_path, category):
+                    validated_changes[category].append(change)
+        
+        return validated_changes
+    
+    def _validate_change_against_content(self, change, content, file_path, category):
+        """Validate that a specific change actually applies to the file content."""
+        if not isinstance(change, dict):
+            return False
+        
+        # **NEW: Enhanced validation to catch false positives**
+        if not self._validate_change_logic(change, content, file_path, category):
+            return False
+        
+        # Validate javax to jakarta changes
+        if category == "javax_to_jakarta":
+            from_import = change.get("from", "")
+            if not from_import:
+                return False
+            
+            # **CRITICAL VALIDATION: Only allow actual javax.* package changes**
+            if not from_import.startswith("javax."):
+                print(f"     🚨 REJECTED: '{from_import}' is not a javax.* package in {file_path}")
+                return False
+            
+            # **NEW: Detect when LLM incorrectly suggests custom package changes**
+            # Check if this is trying to change a custom application package
+            if any(custom_indicator in from_import.lower() for custom_indicator in [
+                'piggymetrics', 'service.security', 'service.jakarta',  # Your specific app packages
+                'com.example', 'org.mycompany', 'net.company'  # Common custom package prefixes
+            ]):
+                print(f"     🚨 REJECTED: '{from_import}' appears to be a custom package, not javax.* in {file_path}")
+                return False
+            
+            # Check if the file actually contains this import
+            import_patterns = [
+                f"import {from_import}",
+                f"import {from_import};",
+                f"{from_import}",  # For qualified references
+            ]
+            
+            if not any(pattern in content for pattern in import_patterns):
+                print(f"     🔍 Skipping false positive: {from_import} not found in {file_path}")
+                return False
+        
+        # Validate Spring Security changes
+        elif category == "spring_security_updates":
+            change_type = change.get("type", "")
+            if change_type == "websecurity_adapter_replacement":
+                if "WebSecurityConfigurerAdapter" not in content:
+                    return False
+        
+        # Validate dependency changes
+        elif category == "dependency_updates":
+            # For build files, be more permissive
+            if not file_path.endswith(('pom.xml', '.gradle', '.gradle.kts')):
+                print(f"     🚨 REJECTED: Dependency update suggested for non-build file: {file_path}")
+                return False
+        
+        # Basic validation that change has required fields
+        required_fields = ["file", "type", "description"]
+        if not all(field in change for field in required_fields):
+            return False
+        
+        return True
+    
+    def _validate_change_logic(self, change, content, file_path, category):
+        """Validate that the change makes logical sense for the file type and content."""
+        change_type = change.get("type", "")
+        from_value = change.get("from", "")
+        to_value = change.get("to", "")
+        
+        # **Rule 1: Version updates should only be in build files**
+        if any(keyword in change_type.lower() for keyword in ["version", "dependency", "spring_boot"]):
+            if not file_path.endswith(('pom.xml', '.gradle', '.gradle.kts', 'build.gradle')):
+                print(f"     🚨 LOGIC ERROR: Version/dependency change '{change_type}' suggested for Java file: {file_path}")
+                return False
+            
+            # Verify version numbers actually exist in build file content
+            if from_value and not any(version_pattern in content for version_pattern in [from_value, f"<version>{from_value}</version>", f'version "{from_value}"']):
+                print(f"     🚨 LOGIC ERROR: Version '{from_value}' not found in build file: {file_path}")
+                return False
+        
+        # **Rule 2: Import changes should only be in source files**
+        if change_type in ["import_replacement", "import_update"]:
+            if not file_path.endswith(('.java', '.kt', '.scala')):
+                print(f"     🚨 LOGIC ERROR: Import change suggested for non-source file: {file_path}")
+                return False
+            
+            # Verify import actually exists
+            if from_value and f"import {from_value}" not in content:
+                print(f"     🚨 LOGIC ERROR: Import '{from_value}' not found in source file: {file_path}")
+                return False
+        
+        # **NEW: Rule 3: JUnit migration validation**
+        if change_type in ["junit_migration", "junit_update"]:
+            if not file_path.endswith(('.java', '.kt')):
+                print(f"     🚨 LOGIC ERROR: JUnit migration suggested for non-source file: {file_path}")
+                return False
+            
+            # Verify test-related content exists
+            test_indicators = ['@test', 'test', '@before', '@after', '@runwith']
+            if not any(indicator in content.lower() for indicator in test_indicators):
+                print(f"     🚨 LOGIC ERROR: JUnit migration suggested for non-test file: {file_path}")
+                return False
+            
+            # Validate JUnit 4→5 specific patterns
+            junit4_to_5_mappings = {
+                '@before': '@beforeeach',
+                '@after': '@aftereach', 
+                '@beforeclass': '@beforeall',
+                '@afterclass': '@afterall',
+                '@ignore': '@disabled',
+                '@runwith': '@extendwith'
+            }
+            
+            if from_value.lower() in junit4_to_5_mappings:
+                expected_to = junit4_to_5_mappings[from_value.lower()]
+                if to_value.lower() != expected_to:
+                    print(f"     🚨 LOGIC ERROR: Invalid JUnit mapping '{from_value}' → '{to_value}', expected '{expected_to}'")
+                    return False
+        
+        # **NEW: Rule 4: JPA/Hibernate validation**
+        if change_type in ["jpa_migration", "hibernate_update"] or (category == "javax_to_jakarta" and "persistence" in from_value.lower()):
+            if not file_path.endswith(('.java', '.kt')):
+                print(f"     🚨 LOGIC ERROR: JPA change suggested for non-source file: {file_path}")
+                return False
+            
+            # Verify JPA-related content exists
+            jpa_indicators = ['@entity', '@table', '@column', '@id', 'import javax.persistence', 'persistence']
+            if not any(indicator in content.lower() for indicator in jpa_indicators):
+                print(f"     🚨 LOGIC ERROR: JPA change suggested for non-JPA file: {file_path}")
+                return False
+        
+        # **NEW: Rule 5: Spring Security specific validation**
+        if category == "spring_security_updates":
+            # Security config changes should be in config classes or security-related files
+            security_indicators = ['security', 'config', 'auth', '@configuration', '@enablewebsecurity', 'websecurityconfigureradapter']
+            file_has_security = (any(indicator in file_path.lower() for indicator in ['security', 'config', 'auth']) or 
+                               any(indicator in content.lower() for indicator in security_indicators))
+            
+            if not file_has_security:
+                print(f"     🚨 LOGIC ERROR: Spring Security change suggested for non-security file: {file_path}")
+                return False
+            
+            # Validate WebSecurityConfigurerAdapter replacement
+            if change_type == "websecurity_adapter_replacement":
+                if "websecurityconfigureradapter" not in content.lower():
+                    print(f"     🚨 LOGIC ERROR: WebSecurityConfigurerAdapter replacement suggested but class not found in {file_path}")
+                    return False
+        
+        # **Rule 6: Check for nonsensical version patterns**
+        if from_value and to_value:
+            # Check if "from" and "to" values make sense
+            if from_value == to_value:
+                print(f"     🚨 LOGIC ERROR: Identical from/to values: {from_value} in {file_path}")
+                return False
+            
+            # Check for realistic version patterns
+            if any(keyword in change_type.lower() for keyword in ["version", "spring", "boot", "junit", "mockito"]):
+                import re
+                version_pattern = r'^\d+\.\d+'
+                if from_value and not re.match(version_pattern, from_value) and not from_value.endswith('.RELEASE'):
+                    if not any(from_value in content for content in [content]):  # Quick content check
+                        print(f"     🚨 LOGIC ERROR: Invalid version format '{from_value}' in {file_path}")
+                        return False
+        
+        # **Rule 7: Validate change category consistency**
+        if category == "javax_to_jakarta" and not from_value.startswith("javax."):
+            print(f"     🚨 LOGIC ERROR: javax_to_jakarta category but from_value is '{from_value}' in {file_path}")
+            return False
+        
+        if category == "dependency_updates" and change_type == "import_replacement":
+            print(f"     🚨 LOGIC ERROR: Import replacement in dependency_updates category for {file_path}")
+            return False
+        
+        # **Rule 8: Validate file path consistency**
+        change_file = change.get("file", "")
+        if change_file and change_file != file_path:
+            print(f"     🚨 LOGIC ERROR: Change file path '{change_file}' doesn't match actual file '{file_path}'")
+            return False
+        
+        return True
     
     def _save_debug_response(self, file_path, response):
         """Save problematic LLM responses for debugging."""
@@ -2189,7 +2787,7 @@ Analyze the file and return ONLY the JSON object:"""
         # Skip certain file types that are unlikely to need Spring migration changes
         skip_extensions = {'.md', '.txt', '.log', '.json', '.csv', '.sql', '.sh', '.bat', '.png', '.jpg', '.gif'}
         skip_patterns = {
-            'test', 'tests', 'spec', 'mock', 'readme', 'changelog', 'license', 
+            'readme', 'changelog', 'license', 
             'docker', 'target/', 'build/', 'node_modules/', '.git/', '.idea/'
         }
         
@@ -2198,7 +2796,7 @@ Analyze the file and return ONLY the JSON object:"""
         if any(file_lower.endswith(ext) for ext in skip_extensions):
             return True
         
-        # Check patterns
+        # Check patterns (using more specific patterns to avoid false positives)
         if any(pattern in file_lower for pattern in skip_patterns):
             return True
         
@@ -2211,7 +2809,15 @@ Analyze the file and return ONLY the JSON object:"""
     
     def _get_file_type(self, file_path):
         """Get a simple description of file type for LLM context."""
-        if file_path.endswith('.java'):
+        file_lower = file_path.lower()
+        
+        # Check if it's a test file
+        if ('/test/' in file_lower or 
+            file_lower.endswith('test.java') or 
+            file_lower.endswith('tests.java') or
+            'test' in os.path.basename(file_lower)):
+            return "Java test file"
+        elif file_path.endswith('.java'):
             return "Java source file"
         elif file_path.endswith('.xml'):
             return "XML configuration file"
@@ -2579,158 +3185,348 @@ Analyze the file and return ONLY the JSON object:"""
         except Exception as e:
             print(f"     Warning: Error validating change for {file_path}: {e}")
             return False
+    
+    def _check_java_version_compatibility(self, content, file_path):
+        """Check if the Java version meets Spring 6 requirements (Java 17+)."""
+        import re
+        
+        java_version = None
+        
+        # Detect Java version in build files
+        if file_path.endswith('pom.xml'):
+            # Maven patterns
+            java_patterns = [
+                r'<java\.version>([^<]+)</java\.version>',
+                r'<maven\.compiler\.source>([^<]+)</maven\.compiler\.source>',
+                r'<source>([^<]+)</source>'
+            ]
+            
+            for pattern in java_patterns:
+                match = re.search(pattern, content)
+                if match:
+                    java_version = match.group(1).strip()
+                    break
+        
+        elif file_path.endswith(('.gradle', '.gradle.kts')):
+            # Gradle patterns
+            java_patterns = [
+                r'sourceCompatibility\s*=\s*[\'"]?(\d+)[\'"]?',
+                r'toolchain.*?languageVersion.*?of\((\d+)\)'
+            ]
+            
+            for pattern in java_patterns:
+                match = re.search(pattern, content)
+                if match:
+                    java_version = match.group(1).strip()
+                    break
+        
+        # Check if Java version is compatible with Spring 6
+        if java_version:
+            try:
+                # Parse Java version (handle 1.8, 11, 17, etc.)
+                if java_version.startswith("1."):
+                    java_major = int(java_version.split(".")[1])
+                else:
+                    java_major = int(java_version.split(".")[0])
+                
+                # Spring 6 requires Java 17+
+                if java_major < 17:
+                    print(f"     🚨 Java {java_version} detected - Spring 6 requires Java 17+")
+                    return {
+                        "javax_to_jakarta": [],
+                        "spring_security_updates": [],
+                        "dependency_updates": [{
+                            "file": file_path,
+                            "type": "java_version_upgrade_required",
+                            "from": f"Java {java_version}",
+                            "to": "Java 17+",
+                            "description": f"CRITICAL: Upgrade Java {java_version} to 17+ for Spring 6",
+                            "automatic": False,
+                            "explanation": "Spring 6 requires minimum Java 17"
+                        }],
+                        "configuration_updates": [],
+                        "other_changes": []
+                    }
+                else:
+                    print(f"     ✅ Java {java_version} is compatible with Spring 6")
+            except (ValueError, IndexError):
+                print(f"     ⚠️ Could not parse Java version: {java_version}")
+        
+        return None
+    
+    def _analyze_java_spring_compatibility(self, java_version, spring_version, file_path):
+        """Analyze Java and Spring version compatibility for Spring 6 migration."""
+        issues = []
+        
+        # Parse Java version
+        java_major_version = None
+        if java_version:
+            try:
+                # Handle versions like "11", "1.8", "17", "21"
+                if java_version.startswith("1."):
+                    # Java 1.8 = Java 8
+                    java_major_version = int(java_version.split(".")[1])
+                else:
+                    java_major_version = int(java_version.split(".")[0])
+            except (ValueError, IndexError):
+                # Couldn't parse version
+                pass
+        
+        # Parse Spring version
+        spring_major_version = None
+        if spring_version:
+            try:
+                if spring_version.startswith(("2.", "1.")):
+                    spring_major_version = 2  # Spring Boot 2.x
+                elif spring_version.startswith("3."):
+                    spring_major_version = 3  # Spring Boot 3.x
+            except:
+                pass
+        
+        # Critical Issue: Java version too low for Spring 6
+        if java_major_version and java_major_version < 17:
+            issues.append({
+                "file": file_path,
+                "type": "java_version_upgrade_required",
+                "from": f"Java {java_version}",
+                "to": "Java 17+",
+                "description": f"🚨 CRITICAL: Spring 6 requires Java 17+, found Java {java_version}",
+                "automatic": False,
+                "explanation": f"Spring 6 and Spring Boot 3.x require minimum Java 17. Current Java {java_version} is not supported.",
+                "priority": "BLOCKING",
+                "migration_impact": "HIGH"
+            })
+        
+        # Issue: Currently on Spring Boot 2.x, needs upgrade
+        if spring_major_version == 2:
+            target_spring_version = "3.2.0"
+            issues.append({
+                "file": file_path,
+                "type": "spring_boot_major_version_upgrade",
+                "from": spring_version,
+                "to": target_spring_version,
+                "description": f"Spring Boot upgrade: {spring_version} → {target_spring_version}",
+                "automatic": java_major_version and java_major_version >= 17,  # Only automatic if Java is compatible
+                "explanation": f"Spring Boot 2.x → 3.x migration required for Spring 6 compatibility",
+                "priority": "HIGH" if java_major_version and java_major_version >= 17 else "BLOCKED",
+                "migration_impact": "HIGH"
+            })
+        
+        # Warning: Unknown Java version
+        if not java_version:
+            issues.append({
+                "file": file_path,
+                "type": "java_version_detection_failed",
+                "from": "Unknown Java version",
+                "to": "Java 17+",
+                "description": "⚠️ Could not detect Java version - manual verification required",
+                "automatic": False,
+                "explanation": "Unable to detect Java version from build file. Ensure Java 17+ before Spring 6 migration.",
+                "priority": "MEDIUM",
+                "migration_impact": "MEDIUM"
+            })
+        
+        # Success: Compatible versions
+        if java_major_version and java_major_version >= 17 and spring_major_version in [None, 2]:
+            issues.append({
+                "file": file_path,
+                "type": "java_version_compatible",
+                "from": f"Java {java_version}",
+                "to": f"Java {java_version} (compatible)",
+                "description": f"✅ Java {java_version} is compatible with Spring 6",
+                "automatic": True,
+                "explanation": f"Java {java_version} meets Spring 6 minimum requirements (Java 17+)",
+                "priority": "INFO",
+                "migration_impact": "LOW"
+            })
+        
+        return issues
 
     def post(self, shared, prep_res, exec_res):
-        """Store the generated migration changes in the shared state."""
-        vlogger = get_verbose_logger()
-        
-        # Store the generated changes
+        """Store the generated changes and provide enhanced reporting."""
         shared["generated_changes"] = exec_res
         
-        # Calculate and store summary statistics
+        vlogger = get_verbose_logger()
+        
+        # Calculate accurate statistics (only count files with actual changes)
         total_changes = 0
-        changes_by_category = {}
+        files_with_changes = set()
+        change_by_category = {}
         
-        for category, changes in exec_res.items():
-            if isinstance(changes, list):
-                category_count = len(changes)
-                total_changes += category_count
-                changes_by_category[category] = category_count
+        for category, changes_list in exec_res.items():
+            if changes_list:  # Only count non-empty categories
+                change_by_category[category] = len(changes_list)
+                total_changes += len(changes_list)
+                
+                # Track unique files in this category
+                for change in changes_list:
+                    if change.get('file'):
+                        files_with_changes.add(change['file'])
         
+        # Enhanced reporting
+        print(f"\n📊 Migration Change Generation Summary:")
+        if total_changes > 0:
+            print(f"   ✅ Total changes identified: {total_changes}")
+            print(f"   📁 Files requiring changes: {len(files_with_changes)}")
+            print(f"   📋 Change breakdown:")
+            
+            for category, count in change_by_category.items():
+                category_name = category.replace('_', ' ').title()
+                print(f"      • {category_name}: {count} changes")
+        else:
+            print(f"   ℹ️  No migration changes needed - all files are already compatible!")
+        
+        if shared.get("verbose_mode"):
+            vlogger.step(f"Generated {total_changes} changes across {len(files_with_changes)} files")
+            for category, count in change_by_category.items():
+                vlogger.debug(f"{category}: {count} changes")
+        
+        # Store enhanced summary
         shared["migration_changes_summary"] = {
             "total_changes": total_changes,
-            "changes_by_category": changes_by_category
+            "files_with_changes": len(files_with_changes),
+            "changes_by_category": change_by_category
         }
         
         # Generate detailed line-by-line change report
-        line_change_report = self._generate_line_change_report(exec_res)
-        shared["line_change_report"] = line_change_report
-        
-        # Log the results
-        if shared.get("verbose_mode"):
-            vlogger.success(f"Migration changes generated: {total_changes} total changes")
-            for category, count in changes_by_category.items():
-                if count > 0:
-                    category_name = category.replace('_', ' ').title()
-                    vlogger.debug(f"{category_name}: {count} changes")
-        
-        print(f"✅ Generated {total_changes} migration changes across {len([c for c in changes_by_category.values() if c > 0])} categories")
-        
-        # Show line-by-line summary if changes exist
         if total_changes > 0:
-            self._print_line_change_summary(line_change_report)
+            line_report = self._generate_enhanced_line_change_report(exec_res)
+            self._print_enhanced_line_change_summary(line_report)
+            shared["line_change_report"] = line_report
         
         return "default"
 
-    def _generate_line_change_report(self, changes):
-        """Generate a detailed report showing which lines are modified in each file."""
-        line_report = {
-            "files_modified": {},
+    def _generate_enhanced_line_change_report(self, changes):
+        """Generate enhanced line-by-line analysis of changes with file verification."""
+        report = {
             "summary": {
                 "total_files": 0,
-                "total_lines_changed": 0,
-                "changes_by_type": {}
-            }
+                "total_changes": 0,
+                "automatic_changes": 0,
+                "manual_review_changes": 0
+            },
+            "by_category": {},
+            "by_file": {}
         }
         
-        all_files = set()
-        total_lines = 0
-        changes_by_type = {}
+        files_processed = set()
         
-        # Process all changes and group by file
-        for category, change_list in changes.items():
-            if not isinstance(change_list, list):
+        for category, changes_list in changes.items():
+            if not changes_list:
                 continue
                 
-            for change in change_list:
-                if not isinstance(change, dict):
-                    continue
-                
+            category_report = {
+                "total_changes": len(changes_list),
+                "files": set(),
+                "automatic": 0,
+                "manual": 0
+            }
+            
+            for change in changes_list:
                 file_path = change.get("file", "unknown")
-                change_type = change.get("type", "unknown")
+                is_automatic = change.get("automatic", False)
                 line_numbers = change.get("line_numbers", [])
-                description = change.get("description", "")
                 
-                # Initialize file entry if needed
-                if file_path not in line_report["files_modified"]:
-                    line_report["files_modified"][file_path] = {
+                # Track file-level stats
+                files_processed.add(file_path)
+                category_report["files"].add(file_path)
+                
+                if is_automatic:
+                    category_report["automatic"] += 1
+                    report["summary"]["automatic_changes"] += 1
+                else:
+                    category_report["manual"] += 1  
+                    report["summary"]["manual_review_changes"] += 1
+                
+                # Build per-file report
+                if file_path not in report["by_file"]:
+                    report["by_file"][file_path] = {
                         "changes": [],
-                        "line_count": len(set(line_numbers)) if line_numbers else 0,
+                        "total_lines_affected": 0,
                         "categories": set()
                     }
                 
-                # Add change to file
-                line_report["files_modified"][file_path]["changes"].append({
-                    "type": change_type,
+                report["by_file"][file_path]["changes"].append({
                     "category": category,
-                    "description": description,
+                    "type": change.get("type", "unknown"),
+                    "description": change.get("description", ""),
                     "line_numbers": line_numbers,
-                    "automatic": change.get("automatic", False)
+                    "automatic": is_automatic,
+                    "from": change.get("from", ""),
+                    "to": change.get("to", "")
                 })
                 
-                # Update file stats
-                if line_numbers:
-                    line_report["files_modified"][file_path]["line_count"] += len(set(line_numbers))
-                line_report["files_modified"][file_path]["categories"].add(category)
-                
-                # Update global stats
-                all_files.add(file_path)
-                total_lines += len(line_numbers) if line_numbers else 1
-                changes_by_type[change_type] = changes_by_type.get(change_type, 0) + 1
+                report["by_file"][file_path]["total_lines_affected"] += len(line_numbers) if line_numbers else 1
+                report["by_file"][file_path]["categories"].add(category)
+            
+            # Convert sets to counts for JSON serialization
+            category_report["file_count"] = len(category_report["files"])
+            del category_report["files"]  # Remove set for JSON compatibility
+            report["by_category"][category] = category_report
         
-        # Convert sets to lists for JSON serialization
-        for file_path in line_report["files_modified"]:
-            line_report["files_modified"][file_path]["categories"] = list(line_report["files_modified"][file_path]["categories"])
+        # Finalize summary
+        report["summary"]["total_files"] = len(files_processed)
+        report["summary"]["total_changes"] = sum(len(changes) for changes in changes.values() if changes)
         
-        # Update summary
-        line_report["summary"] = {
-            "total_files": len(all_files),
-            "total_lines_changed": total_lines,
-            "changes_by_type": changes_by_type
-        }
+        # Convert sets to lists for JSON compatibility
+        for file_path, file_report in report["by_file"].items():
+            file_report["categories"] = list(file_report["categories"])
         
-        return line_report
+        return report
 
-    def _print_line_change_summary(self, line_report):
-        """Print a summary of line-by-line changes to the console."""
-        files_modified = line_report.get("files_modified", {})
-        summary = line_report.get("summary", {})
+    def _print_enhanced_line_change_summary(self, line_report):
+        """Print enhanced summary of line changes with clear metrics."""
+        print(f"\n📋 Detailed Change Analysis:")
         
-        if not files_modified:
-            return
+        summary = line_report["summary"]
+        print(f"   📁 Files to modify: {summary['total_files']}")
+        print(f"   📝 Total changes: {summary['total_changes']}")
+        print(f"   🤖 Automatic: {summary['automatic_changes']}")
+        print(f"   👥 Manual review: {summary['manual_review_changes']}")
         
-        print(f"\n📋 Line-by-Line Change Summary:")
-        print(f"   📁 Files Modified: {summary.get('total_files', 0)}")
-        print(f"   📝 Lines Changed: {summary.get('total_lines_changed', 0)}")
-        print()
+        # Show category breakdown
+        if line_report["by_category"]:
+            print(f"\n   📊 By Category:")
+            for category, details in line_report["by_category"].items():
+                category_name = category.replace('_', ' ').title()
+                print(f"      • {category_name}: {details['total_changes']} changes in {details['file_count']} files")
         
-        # Show details for each modified file
-        for file_path, file_info in sorted(files_modified.items()):
-            changes = file_info.get("changes", [])
-            line_count = file_info.get("line_count", 0)
-            categories = file_info.get("categories", [])
+        # Show files requiring changes
+        if line_report["by_file"]:
+            print(f"\n   📄 Files Requiring Changes:")
             
-            print(f"   📄 {file_path}")
-            print(f"      📝 {len(changes)} changes, ~{line_count} lines affected")
-            print(f"      🏷️  Categories: {', '.join(categories)}")
+            # Sort files by number of changes
+            sorted_files = sorted(
+                line_report["by_file"].items(),
+                key=lambda x: len(x[1]["changes"]),
+                reverse=True
+            )
             
-            # Show specific line numbers for up to 3 changes
-            for i, change in enumerate(changes[:3]):
-                line_numbers = change.get("line_numbers", [])
-                change_type = change.get("type", "unknown")
-                automatic = change.get("automatic", False)
+            for file_path, file_info in sorted_files[:10]:  # Show top 10
+                change_count = len(file_info["changes"])
+                lines_affected = file_info["total_lines_affected"]
+                categories = ", ".join(cat.replace('_', ' ').title() for cat in file_info["categories"])
                 
-                if line_numbers:
-                    line_range = self._format_line_range(line_numbers)
-                    auto_marker = "🤖" if automatic else "👤"
-                    print(f"      {auto_marker} {change_type}: lines {line_range}")
-                else:
-                    auto_marker = "🤖" if automatic else "👤"
-                    print(f"      {auto_marker} {change_type}: location TBD")
+                print(f"      📄 {file_path}")
+                print(f"         📝 {change_count} changes, ~{lines_affected} lines affected")
+                print(f"         🏷️  Categories: {categories}")
+                
+                # Show specific changes for this file
+                for change in file_info["changes"][:3]:  # Show first 3 changes
+                    change_type = change["type"].replace('_', ' ').title()
+                    line_info = ""
+                    if change["line_numbers"]:
+                        line_info = f"lines {self._format_line_range(change['line_numbers'])}"
+                    auto_marker = "🤖" if change["automatic"] else "👥"
+                    print(f"         {auto_marker} {change_type}: {line_info}")
+                
+                if len(file_info["changes"]) > 3:
+                    remaining = len(file_info["changes"]) - 3
+                    print(f"         ... and {remaining} more changes")
             
-            if len(changes) > 3:
-                print(f"      ... and {len(changes) - 3} more changes")
-            print()
+            if len(sorted_files) > 10:
+                remaining_files = len(sorted_files) - 10
+                print(f"      ... and {remaining_files} more files")
 
     def _format_line_range(self, line_numbers):
         """Format line numbers into a readable range string."""
@@ -2747,3 +3543,1340 @@ Analyze the file and return ONLY the JSON object:"""
         
         # For many lines, show range
         return f"{min(sorted_lines)}-{max(sorted_lines)} ({len(sorted_lines)} lines)"
+
+    def _comprehensive_javax_scan(self, files_data, project_name):
+        """
+        Perform comprehensive scan for ALL javax imports and generate complete javax→jakarta changes.
+        This catches any imports that the LLM might have missed.
+        """
+        vlogger = get_verbose_logger()
+        vlogger.step("🔍 Performing comprehensive javax import scan")
+        
+        comprehensive_changes = {}
+        javax_pattern = re.compile(r'import\s+(javax\.[a-zA-Z][a-zA-Z0-9_.]*)')
+        
+        # Comprehensive javax→jakarta mappings
+        javax_to_jakarta_mappings = {
+            # Core EE packages  
+            "javax.persistence": "jakarta.persistence",
+            "javax.validation": "jakarta.validation",
+            "javax.servlet": "jakarta.servlet", 
+            "javax.annotation": "jakarta.annotation",
+            "javax.ejb": "jakarta.ejb",
+            "javax.jms": "jakarta.jms",
+            "javax.enterprise": "jakarta.enterprise",
+            "javax.inject": "jakarta.inject",
+            "javax.interceptor": "jakarta.interceptor",
+            "javax.decorator": "jakarta.decorator",
+            "javax.transaction": "jakarta.transaction",
+            "javax.ws.rs": "jakarta.ws.rs",
+            "javax.json": "jakarta.json",
+            "javax.jsonb": "jakarta.jsonb",
+            "javax.mail": "jakarta.mail",
+            "javax.faces": "jakarta.faces",
+            "javax.websocket": "jakarta.websocket",
+            "javax.security.enterprise": "jakarta.security.enterprise",
+            "javax.security.auth.message": "jakarta.security.auth.message",
+            "javax.xml.bind": "jakarta.xml.bind",
+            "javax.xml.soap": "jakarta.xml.soap", 
+            "javax.xml.ws": "jakarta.xml.ws",
+            "javax.batch": "jakarta.batch",
+            "javax.enterprise.concurrent": "jakarta.enterprise.concurrent",
+            "javax.security.jacc": "jakarta.security.jacc",
+        }
+        
+        total_javax_found = 0
+        total_files_scanned = 0
+        
+        for file_path, file_data in files_data.items():
+            if not file_path.endswith(('.java', '.kt')):
+                continue
+                
+            content = file_data.get('content', '')
+            if not content:
+                continue
+                
+            total_files_scanned += 1
+            javax_imports = javax_pattern.findall(content)
+            
+            if javax_imports:
+                file_changes = []
+                print(f"      📁 {file_path}: Found {len(javax_imports)} javax imports")
+                
+                for javax_import in javax_imports:
+                    total_javax_found += 1
+                    
+                    # Find matching jakarta equivalent
+                    jakarta_import = None
+                    for javax_pkg, jakarta_pkg in javax_to_jakarta_mappings.items():
+                        if javax_import.startswith(javax_pkg):
+                            jakarta_import = javax_import.replace(javax_pkg, jakarta_pkg, 1)
+                            break
+                    
+                    if jakarta_import:
+                        change = {
+                            "type": "javax_to_jakarta_import", 
+                            "file": file_path,
+                            "from": javax_import,
+                            "to": jakarta_import,
+                            "line_number": self._find_import_line_number(content, javax_import),
+                            "description": f"Migrate {javax_import} to {jakarta_import}",
+                            "automatic": True,  # These are safe automatic changes
+                            "confidence": "high"
+                        }
+                        file_changes.append(change)
+                        print(f"        ✅ {javax_import} → {jakarta_import}")
+                    else:
+                        print(f"        ⚠️  No mapping found for {javax_import}")
+                
+                if file_changes:
+                    comprehensive_changes[file_path] = {
+                        "javax_to_jakarta": file_changes
+                    }
+        
+        print(f"      📊 Comprehensive scan results:")
+        print(f"         • Files scanned: {total_files_scanned}")
+        print(f"         • Total javax imports found: {total_javax_found}")
+        print(f"         • Files with javax imports: {len(comprehensive_changes)}")
+        
+        return comprehensive_changes
+    
+    def _find_import_line_number(self, content, import_statement):
+        """Find the line number of an import statement."""
+        lines = content.split('\n')
+        for i, line in enumerate(lines, 1):
+            if f"import {import_statement}" in line:
+                return i
+        return None
+
+
+class MigrationFileApplicator(Node):
+    """
+    Actually applies the generated migration changes to files in the migration workspace.
+    This node takes the changes generated by MigrationChangeGenerator and applies them to the actual files.
+    """
+    
+    def prep(self, shared):
+        vlogger = get_verbose_logger()
+        
+        if shared.get("verbose_mode"):
+            vlogger.step("Preparing migration file application")
+        
+        # Check if changes should be applied
+        apply_changes = shared.get("apply_changes", False)
+        if not apply_changes:
+            if shared.get("verbose_mode"):
+                vlogger.debug("apply_changes is False - skipping file modifications")
+            print("⏭️  Skipping file modifications (use --apply-changes to enable)")
+            return None, None, None
+        
+        generated_changes = shared.get("generated_changes", {})
+        backup_info = shared.get("backup_info", {})
+        project_name = shared["project_name"]
+        
+        if not generated_changes:
+            if shared.get("verbose_mode"):
+                vlogger.warning("No generated changes found to apply")
+            print("⏭️  No generated changes found to apply")
+            return None, None, None
+        
+        if not backup_info:
+            if shared.get("verbose_mode"):
+                vlogger.warning("No backup info found - cannot apply changes safely")
+            print("❌ No backup info found - cannot apply changes safely")
+            return None, None, None
+        
+        migration_workspace = backup_info.get("migration_workspace")
+        if not migration_workspace or not os.path.exists(migration_workspace):
+            if shared.get("verbose_mode"):
+                vlogger.error(f"Migration workspace not found: {migration_workspace}")
+            print(f"❌ Migration workspace not found: {migration_workspace}")
+            return None, None, None
+        
+        if shared.get("verbose_mode"):
+            vlogger.debug(f"Applying changes to workspace: {migration_workspace}")
+            vlogger.debug(f"Change categories: {list(generated_changes.keys())}")
+        
+        return generated_changes, migration_workspace, project_name
+    
+    def exec(self, prep_res):
+        if prep_res is None or prep_res[0] is None:
+            return {"success": True, "skipped": True, "reason": "No changes to apply or changes disabled"}
+        
+        generated_changes, migration_workspace, project_name = prep_res
+        vlogger = get_verbose_logger()
+        
+        monitor = get_performance_monitor()
+        monitor.start_operation("apply_migration_changes")
+        
+        print(f"🔧 Applying migration changes to files in workspace...")
+        print(f"📁 Workspace: {migration_workspace}")
+        
+        # Track application results
+        results = {
+            "successful": [],
+            "skipped": [],
+            "failed": [],
+            "files_modified": set(),
+            "total_changes_applied": 0
+        }
+        
+        # **NEW: Force Spring Boot version updates in build files**
+        self._force_spring_boot_updates(migration_workspace, results)
+        
+        # Process each category of changes
+        for category, changes in generated_changes.items():
+            if not isinstance(changes, list):
+                continue
+            
+            print(f"\n📋 Processing {category.replace('_', ' ').title()}: {len(changes)} changes")
+            
+            for change in changes:
+                if not isinstance(change, dict):
+                    continue
+                
+                try:
+                    result = self._apply_single_change(change, migration_workspace, category)
+                    
+                    if result["success"]:
+                        results["successful"].append(result)
+                        results["files_modified"].add(change.get("file", "unknown"))
+                        results["total_changes_applied"] += 1
+                        print(f"   ✅ {result['description']}")
+                    elif result.get("skipped", False):
+                        results["skipped"].append(result)
+                        print(f"   ⏭️  {result['reason']}")
+                    else:
+                        results["failed"].append(result)
+                        print(f"   ❌ {result['error']}")
+                        
+                except Exception as e:
+                    error_result = {
+                        "success": False,
+                        "file": change.get("file", "unknown"),
+                        "type": change.get("type", "unknown"),
+                        "error": str(e)
+                    }
+                    results["failed"].append(error_result)
+                    print(f"   ❌ Error applying change to {change.get('file', 'unknown')}: {e}")
+        
+        # Summary
+        total_successful = len(results["successful"])
+        total_skipped = len(results["skipped"])
+        total_failed = len(results["failed"])
+        files_modified = len(results["files_modified"])
+        
+        print(f"\n📊 Application Summary:")
+        print(f"   ✅ Applied: {total_successful}")
+        print(f"   ⏭️  Skipped: {total_skipped}")
+        print(f"   ❌ Failed: {total_failed}")
+        print(f"   📁 Files Modified: {files_modified}")
+        
+        monitor.end_operation("apply_migration_changes", 
+                            files_processed=files_modified)
+        
+        results["success"] = total_successful > 0 or total_skipped > 0
+        return results
+    
+    def _force_spring_boot_updates(self, migration_workspace, results):
+        """Force Spring Boot version updates in build files regardless of LLM detection."""
+        import os
+        import re
+        
+        print(f"\n🔍 Checking for Spring Boot version updates...")
+        
+        # Find all build files
+        build_files = []
+        for root, dirs, files in os.walk(migration_workspace):
+            for file in files:
+                if file in ['pom.xml'] or file.endswith(('.gradle', '.gradle.kts')):
+                    build_files.append(os.path.join(root, file))
+        
+        for build_file in build_files:
+            relative_path = os.path.relpath(build_file, migration_workspace)
+            
+            try:
+                with open(build_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                original_content = content
+                
+                # Check for Spring Boot 2.x versions and update them
+                if build_file.endswith('pom.xml'):
+                    # Look for Spring Boot 2.x parent
+                    if re.search(r'<version>2\.\d+\.\d+(?:\.RELEASE)?</version>', content):
+                        # Update Spring Boot parent version
+                        content = re.sub(
+                            r'(<parent>\s*<groupId>org\.springframework\.boot</groupId>\s*<artifactId>spring-boot-starter-parent</artifactId>\s*<version>)2\.\d+\.\d+(?:\.RELEASE)?(</version>)',
+                            r'\g<1>3.2.0\g<2>',
+                            content,
+                            flags=re.DOTALL
+                        )
+                        
+                        if content != original_content:
+                            with open(build_file, 'w', encoding='utf-8') as f:
+                                f.write(content)
+                            
+                            results["successful"].append({
+                                "success": True,
+                                "file": relative_path,
+                                "type": "spring_boot_version_update",
+                                "description": f"Force updated Spring Boot version in {relative_path}"
+                            })
+                            results["files_modified"].add(relative_path)
+                            results["total_changes_applied"] += 1
+                            print(f"   🔄 Force updated Spring Boot version in {relative_path}")
+                
+            except Exception as e:
+                print(f"   ⚠️  Error checking {relative_path}: {e}")
+                continue
+    
+    def _apply_single_change(self, change, migration_workspace, category):
+        """Apply a single change to a file."""
+        file_path = change.get("file", "")
+        change_type = change.get("type", "")
+        automatic = change.get("automatic", False)
+        
+        if not file_path:
+            return {"success": False, "error": "No file path specified"}
+ 
+        can_apply_automatically = (
+            automatic or  # Original automatic flag
+            # javax→jakarta import replacements are generally safe
+            (category == "javax_to_jakarta" and change_type == "import_replacement") or
+            # Spring Boot version updates are safe
+            (category == "dependency_updates" and "spring" in change_type.lower()) or
+            # Simple configuration property updates
+            (category == "configuration_updates" and change_type in ["property_update", "update"])
+        )
+        
+        if not can_apply_automatically:
+            return {
+                "success": False,
+                "skipped": True,
+                "file": file_path,
+                "type": change_type,
+                "reason": f"Manual review required for {category}/{change_type} - not applied automatically"
+            }
+        
+        full_file_path = os.path.join(migration_workspace, file_path)
+        
+        if not os.path.exists(full_file_path):
+            return {
+                "success": False,
+                "file": file_path,
+                "type": change_type,
+                "error": f"File not found in workspace: {full_file_path}"
+            }
+        
+        try:
+            # Read the file
+            with open(full_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            original_content = content
+            original_lines = len(original_content.split('\n'))
+            
+            # **NEW: Try Spring Boot version update first for dependency changes**
+            if category == "dependency_updates" and ("spring" in change_type.lower() or "boot" in change_type.lower()):
+                content, updated = self._apply_spring_boot_version_update(content, file_path)
+                if not updated:
+                    # Fall back to generic dependency change
+                    content = self._apply_dependency_change(content, change)
+            elif category == "javax_to_jakarta":
+                content = self._apply_javax_to_jakarta_change(content, change)
+            elif category == "dependency_updates":
+                content = self._apply_dependency_change(content, change)
+            elif category == "configuration_updates":
+                content = self._apply_configuration_change(content, change)
+            else:
+                # Generic replacement for other types
+                content = self._apply_generic_change(content, change)
+            
+            # Check if content actually changed
+            if content == original_content:
+                return {
+                    "success": False,
+                    "skipped": True,
+                    "file": file_path,
+                    "type": change_type,
+                    "reason": "No changes needed - content already correct"
+                }
+            
+            # Write the modified content back
+            with open(full_file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            # Calculate lines changed (approximate)
+            new_lines = len(content.split('\n'))
+            lines_changed = abs(new_lines - original_lines)
+            
+            return {
+                "success": True,
+                "file": file_path,
+                "type": change_type,
+                "description": f"Applied {change_type} in {file_path}",
+                "lines_changed": lines_changed
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "file": file_path,
+                "type": change_type,
+                "error": f"Error modifying file: {str(e)}"
+            }
+    
+    def _apply_javax_to_jakarta_change(self, content, change):
+        """Apply javax to jakarta import changes with comprehensive mapping."""
+        from_import = change.get("from", "")
+        to_import = change.get("to", "")
+        
+        if not from_import or not to_import:
+            print(f"      ❌ Missing from/to values in change: {change}")
+            return content, False
+
+        # **CRITICAL: Only allow javax.* imports**
+        if not from_import.startswith("javax."):
+            print(f"      🚨 BLOCKED: Attempted to change non-javax import '{from_import}' - this would corrupt custom code!")
+            return content, False
+        
+        # **NEW: Comprehensive javax→jakarta mapping validation**
+        javax_to_jakarta_mappings = {
+            # Core EE packages
+            "javax.persistence": "jakarta.persistence",
+            "javax.validation": "jakarta.validation", 
+            "javax.servlet": "jakarta.servlet",
+            "javax.annotation": "jakarta.annotation",
+            "javax.ejb": "jakarta.ejb",
+            "javax.jms": "jakarta.jms",
+            "javax.enterprise": "jakarta.enterprise",
+            "javax.inject": "jakarta.inject",
+            "javax.interceptor": "jakarta.interceptor",
+            "javax.decorator": "jakarta.decorator",
+            "javax.transaction": "jakarta.transaction",
+            "javax.ws.rs": "jakarta.ws.rs",
+            "javax.json": "jakarta.json",
+            "javax.jsonb": "jakarta.jsonb",
+            "javax.mail": "jakarta.mail",
+            "javax.faces": "jakarta.faces",
+            "javax.websocket": "jakarta.websocket",
+            "javax.security.enterprise": "jakarta.security.enterprise",
+            "javax.security.auth.message": "jakarta.security.auth.message",
+            "javax.xml.bind": "jakarta.xml.bind",
+            "javax.xml.soap": "jakarta.xml.soap",
+            "javax.xml.ws": "jakarta.xml.ws",
+            # Batch processing
+            "javax.batch": "jakarta.batch",
+            # Concurrency utilities  
+            "javax.enterprise.concurrent": "jakarta.enterprise.concurrent",
+            # Authentication
+            "javax.security.jacc": "jakarta.security.jacc",
+        }
+        
+        # Validate the mapping
+        found_valid_mapping = False
+        for javax_pkg, jakarta_pkg in javax_to_jakarta_mappings.items():
+            if from_import.startswith(javax_pkg):
+                expected_to = from_import.replace(javax_pkg, jakarta_pkg, 1)
+                if to_import != expected_to:
+                    print(f"      🚨 INCORRECT MAPPING: '{from_import}' → '{to_import}', expected '{expected_to}'")
+                    return content, False
+                found_valid_mapping = True
+                break
+        
+        if not found_valid_mapping:
+            print(f"      ⚠️  UNMAPPED javax package: '{from_import}' - please verify this is correct")
+        
+        # **ENHANCED: More precise import replacement**
+        import re
+        
+        # Pattern 1: Standard import statement
+        import_pattern = rf'^(\s*import\s+){re.escape(from_import)}(\s*;.*?)$'
+        if re.search(import_pattern, content, re.MULTILINE):
+            new_content = re.sub(import_pattern, rf'\g<1>{to_import}\g<2>', content, flags=re.MULTILINE)
+            if new_content != content:
+                print(f"      ✅ Updated import: {from_import} → {to_import}")
+                return new_content, True
+        
+        # Pattern 2: Static import
+        static_import_pattern = rf'^(\s*import\s+static\s+){re.escape(from_import)}(\.[^;]+\s*;.*?)$'  
+        if re.search(static_import_pattern, content, re.MULTILINE):
+            new_content = re.sub(static_import_pattern, rf'\g<1>{to_import}\g<2>', content, flags=re.MULTILINE)
+            if new_content != content:
+                print(f"      ✅ Updated static import: {from_import} → {to_import}")
+                return new_content, True
+                
+        # Pattern 3: Wildcard import  
+        wildcard_pattern = rf'^(\s*import\s+){re.escape(from_import)}(\.\*\s*;.*?)$'
+        if re.search(wildcard_pattern, content, re.MULTILINE):
+            new_content = re.sub(wildcard_pattern, rf'\g<1>{to_import}\g<2>', content, flags=re.MULTILINE)
+            if new_content != content:
+                print(f"      ✅ Updated wildcard import: {from_import}.* → {to_import}.*")
+                return new_content, True
+
+        print(f"      ⚠️  Import not found in content: {from_import}")
+        return content, False
+    
+    def _apply_dependency_change(self, content, change):
+        """Apply dependency version updates in build files."""
+        import re
+        
+        from_version = change.get("from", "")
+        to_version = change.get("to", "")
+        description = change.get("description", "").lower()
+        
+        # Enhanced Spring Boot version update for Maven
+        if "spring" in description and "boot" in description:
+            # Handle Spring Boot parent version update
+            spring_boot_pattern = r'(<groupId>org\.springframework\.boot</groupId>\s*<artifactId>spring-boot-starter-parent</artifactId>\s*<version>)[^<]+(</version>)'
+            if re.search(spring_boot_pattern, content):
+                # Update to Spring Boot 3.x
+                content = re.sub(spring_boot_pattern, r'\g<1>3.2.0\g<2>', content)
+                print(f"      📦 Updated Spring Boot parent to 3.2.0")
+                return content
+        
+        # Handle specific version replacements
+        if from_version and to_version:
+            # Direct version replacement
+            content = content.replace(from_version, to_version)
+            
+            # Handle Maven version properties
+            if "<version>" in from_version:
+                content = content.replace(from_version, to_version)
+            else:
+                # Handle version numbers without tags
+                version_pattern = rf'<version>{re.escape(from_version)}</version>'
+                replacement = f'<version>{to_version}</version>'
+                content = re.sub(version_pattern, replacement, content)
+        
+        # Generic Spring dependency updates
+        if "spring" in description:
+            # Update common Spring dependencies to compatible versions
+            spring_updates = {
+                r'<spring\.version>[^<]+</spring\.version>': '<spring.version>6.0.0</spring.version>',
+                r'<spring-boot\.version>[^<]+</spring-boot\.version>': '<spring-boot.version>3.2.0</spring-boot.version>',
+                r'<spring-security\.version>[^<]+</spring-security\.version>': '<spring-security.version>6.2.0</spring-security.version>',
+            }
+            
+            for pattern, replacement in spring_updates.items():
+                if re.search(pattern, content):
+                    content = re.sub(pattern, replacement, content)
+                    print(f"      📦 Updated dependency version pattern")
+        
+        return content
+    
+    def _apply_configuration_change(self, content, change):
+        """Apply configuration property changes."""
+        from_prop = change.get("from", "")
+        to_prop = change.get("to", "")
+        
+        if from_prop and to_prop:
+            # For properties files
+            if from_prop.endswith("="):
+                content = content.replace(from_prop, to_prop)
+            else:
+                # For YAML/properties without =
+                content = content.replace(from_prop, to_prop)
+        
+        return content
+    
+    def _apply_generic_change(self, content, change):
+        """Apply generic string replacements."""
+        from_text = change.get("from", "")
+        to_text = change.get("to", "")
+        
+        if from_text and to_text:
+            content = content.replace(from_text, to_text)
+        
+        return content
+    
+    def _apply_spring_boot_version_update(self, content, file_path):
+        """Specifically handle Spring Boot version updates in pom.xml and build.gradle files."""
+        import re
+        
+        updated = False
+        
+        if file_path.endswith('pom.xml'):
+            original_content = content
+            
+            # Maven Spring Boot parent update
+            spring_boot_parent_pattern = r'(<parent>\s*<groupId>org\.springframework\.boot</groupId>\s*<artifactId>spring-boot-starter-parent</artifactId>\s*<version>)[^<]+(</version>)'
+            if re.search(spring_boot_parent_pattern, content, re.DOTALL):
+                content = re.sub(spring_boot_parent_pattern, r'\g<1>3.2.0\g<2>', content, flags=re.DOTALL)
+                print(f"      🔄 Updated Spring Boot parent version to 3.2.0 in {file_path}")
+                updated = True
+            
+            # **NEW: Update Java version for Spring 6 compatibility**
+            java_version_pattern = r'(<java\.version>)[^<]+(</java\.version>)'
+            if re.search(java_version_pattern, content):
+                # Check if current version is less than 17
+                java_version_match = re.search(r'<java\.version>([^<]+)</java\.version>', content)
+                if java_version_match:
+                    current_version = java_version_match.group(1).strip()
+                    try:
+                        if current_version.startswith("1."):
+                            current_major = int(current_version.split(".")[1])
+                        else:
+                            current_major = int(current_version.split(".")[0])
+                        
+                        if current_major < 17:
+                            content = re.sub(java_version_pattern, r'\g<1>17\g<2>', content)
+                            print(f"      🔄 Updated Java version from {current_version} to 17 in {file_path}")
+                            updated = True
+                    except (ValueError, IndexError):
+                        # If we can't parse the version, update it anyway for safety
+                        content = re.sub(java_version_pattern, r'\g<1>17\g<2>', content)
+                        print(f"      🔄 Updated Java version (unparseable: {current_version}) to 17 in {file_path}")
+                        updated = True
+            
+            # **NEW: Update Spring Cloud version for Spring Boot 3.x compatibility**
+            spring_cloud_pattern = r'(<spring-cloud\.version>)[^<]+(</spring-cloud\.version>)'
+            if re.search(spring_cloud_pattern, content):
+                spring_cloud_match = re.search(r'<spring-cloud\.version>([^<]+)</spring-cloud\.version>', content)
+                if spring_cloud_match:
+                    current_cloud_version = spring_cloud_match.group(1).strip()
+                    # Old versions like Finchley.RELEASE, Greenwich.RELEASE need updating
+                    old_versions = ['finchley', 'greenwich', 'hoxton', 'edgware', '2020.', '2021.', '2022.']
+                    if any(old_version in current_cloud_version.lower() for old_version in old_versions):
+                        content = re.sub(spring_cloud_pattern, r'\g<1>2023.0.0\g<2>', content)
+                        print(f"      🔄 Updated Spring Cloud version from {current_cloud_version} to 2023.0.0 in {file_path}")
+                        updated = True
+            
+            # **NEW: Update JUnit version for Spring 6 compatibility**
+            junit_version_pattern = r'(<junit\.version>)[^<]+(</junit\.version>)'
+            if re.search(junit_version_pattern, content):
+                junit_match = re.search(r'<junit\.version>([^<]+)</junit\.version>', content)
+                if junit_match:
+                    current_junit_version = junit_match.group(1).strip()
+                    # JUnit 4.x needs updating to 5.x
+                    if current_junit_version.startswith('4.'):
+                        content = re.sub(junit_version_pattern, r'\g<1>5.10.0\g<2>', content)
+                        print(f"      🔄 Updated JUnit version from {current_junit_version} to 5.10.0 in {file_path}")
+                        updated = True
+            
+            # **NEW: Update Mockito version for Spring 6 compatibility**
+            mockito_version_pattern = r'(<mockito\.version>)[^<]+(</mockito\.version>)'
+            if re.search(mockito_version_pattern, content):
+                mockito_match = re.search(r'<mockito\.version>([^<]+)</mockito\.version>', content)
+                if mockito_match:
+                    current_mockito_version = mockito_match.group(1).strip()
+                    # Older Mockito versions may have compatibility issues
+                    version_parts = current_mockito_version.split('.')
+                    if len(version_parts) >= 1 and int(version_parts[0]) < 4:
+                        content = re.sub(mockito_version_pattern, r'\g<1>5.5.0\g<2>', content)
+                        print(f"      🔄 Updated Mockito version from {current_mockito_version} to 5.5.0 in {file_path}")
+                        updated = True
+            
+            # **NEW: Add missing dependency versions if Spring Boot 3.x parent is detected**
+            if '<version>3.' in content and '<parent>' in content:
+                # Add JUnit 5 version if missing
+                if '<junit.version>' not in content and '<junit-jupiter.version>' not in content:
+                    properties_pattern = r'(<properties>.*?)(</properties>)'
+                    if re.search(properties_pattern, content, re.DOTALL):
+                        properties_replacement = r'\g<1>\t\t<junit-jupiter.version>5.10.0</junit-jupiter.version>\n\t\g<2>'
+                        content = re.sub(properties_pattern, properties_replacement, content, flags=re.DOTALL)
+                        print(f"      ➕ Added JUnit Jupiter version 5.10.0 to {file_path}")
+                        updated = True
+        
+        elif file_path.endswith(('.gradle', '.gradle.kts')):
+            # Gradle Spring Boot plugin update
+            gradle_plugin_pattern = r"(id\s+['\"]org\.springframework\.boot['\"]?\s+version\s+['\"])[^'\"]+(['\"])"
+            if re.search(gradle_plugin_pattern, content):
+                content = re.sub(gradle_plugin_pattern, r'\g<1>3.2.0\g<2>', content)
+                print(f"      🔄 Updated Spring Boot plugin to 3.2.0 in {file_path}")
+                updated = True
+            
+            # **NEW: Kotlin DSL style plugin update**
+            kotlin_plugin_pattern = r'(id\s*\(\s*["\']org\.springframework\.boot["\']\s*\)\s+version\s+["\'])[^"\']+(["\'])'
+            if re.search(kotlin_plugin_pattern, content):
+                content = re.sub(kotlin_plugin_pattern, r'\g<1>3.2.0\g<2>', content)
+                print(f"      🔄 Updated Spring Boot plugin (Kotlin DSL) to 3.2.0 in {file_path}")
+                updated = True
+            
+            # **NEW: Update Java version in Gradle**
+            gradle_java_pattern = r"(sourceCompatibility\s*=\s*['\"]?)(\d+)['\"]?"
+            if re.search(gradle_java_pattern, content):
+                java_match = re.search(r"sourceCompatibility\s*=\s*['\"]?(\d+)['\"]?", content)
+                if java_match:
+                    current_java = int(java_match.group(1))
+                    if current_java < 17:
+                        content = re.sub(gradle_java_pattern, r'\g<1>17\g<2>', content)
+                        print(f"      🔄 Updated Gradle Java sourceCompatibility to 17 in {file_path}")
+                        updated = True
+            
+            # **NEW: Kotlin DSL Java version**
+            kotlin_java_pattern = r'(java\s*\{\s*sourceCompatibility\s*=\s*JavaVersion\.VERSION_)(\d+)(\s*\})'
+            if re.search(kotlin_java_pattern, content):
+                java_match = re.search(r'java\s*\{\s*sourceCompatibility\s*=\s*JavaVersion\.VERSION_(\d+)', content)
+                if java_match:
+                    current_java = int(java_match.group(1))
+                    if current_java < 17:
+                        content = re.sub(kotlin_java_pattern, r'\g<1>17\g<3>', content)
+                        print(f"      🔄 Updated Kotlin DSL Java sourceCompatibility to 17 in {file_path}")
+                        updated = True
+            
+            # **NEW: Update JUnit version in Gradle**
+            gradle_junit_pattern = r'(testImplementation\s+["\']org\.junit\.jupiter:junit-jupiter:)[^"\']+(["\'])'
+            if re.search(gradle_junit_pattern, content):
+                content = re.sub(gradle_junit_pattern, r'\g<1>5.10.0\g<2>', content)
+                print(f"      🔄 Updated JUnit Jupiter to 5.10.0 in {file_path}")
+                updated = True
+            
+            # **NEW: Update Mockito version in Gradle**
+            gradle_mockito_pattern = r'(testImplementation\s+["\']org\.mockito:mockito-core:)[^"\']+(["\'])'
+            if re.search(gradle_mockito_pattern, content):
+                content = re.sub(gradle_mockito_pattern, r'\g<1>5.5.0\g<2>', content)
+                print(f"      🔄 Updated Mockito to 5.5.0 in {file_path}")
+                updated = True
+            
+            # **NEW: Spring Cloud BOM update in Gradle**
+            gradle_spring_cloud_pattern = r'(implementation\s+platform\s*\(["\']org\.springframework\.cloud:spring-cloud-dependencies:)[^"\']+(["\'])'
+            if re.search(gradle_spring_cloud_pattern, content):
+                content = re.sub(gradle_spring_cloud_pattern, r'\g<1>2023.0.0\g<2>', content)
+                print(f"      🔄 Updated Spring Cloud BOM to 2023.0.0 in {file_path}")
+                updated = True
+            
+            # Gradle dependency version
+            gradle_dep_pattern = r"(implementation\s+['\"]org\.springframework\.boot:spring-boot-.*?:)[^'\"]+(['\"])"
+            if re.search(gradle_dep_pattern, content):
+                content = re.sub(gradle_dep_pattern, r'\g<1>3.2.0\g<2>', content)
+                print(f"      🔄 Updated Spring Boot dependencies to 3.2.0 in {file_path}")
+                updated = True
+        
+        return content, updated
+    
+    def post(self, shared, prep_res, exec_res):
+        """Store the application results and update shared state."""
+        vlogger = get_verbose_logger()
+        
+        if exec_res.get("skipped", False):
+            # Operation was skipped
+            shared["applied_changes"] = {"skipped": True, "reason": exec_res.get("reason", "Unknown")}
+            if shared.get("verbose_mode"):
+                vlogger.debug(f"File application skipped: {exec_res.get('reason')}")
+            return "default"
+        
+        if exec_res.get("success", False):
+            shared["applied_changes"] = exec_res
+            
+            total_applied = exec_res.get("total_changes_applied", 0)
+            files_modified = len(exec_res.get("files_modified", set()))
+            
+            if shared.get("verbose_mode"):
+                vlogger.success(f"Migration changes applied: {total_applied} changes to {files_modified} files")
+            
+            print(f"✅ Successfully applied {total_applied} migration changes to {files_modified} files")
+            
+            # Show which files were modified
+            if exec_res.get("files_modified"):
+                print(f"\n📄 Files Modified:")
+                for file_path in sorted(exec_res["files_modified"]):
+                    print(f"   📝 {file_path}")
+        else:
+            if shared.get("verbose_mode"):
+                vlogger.error("Failed to apply migration changes")
+            print(f"❌ Failed to apply migration changes: {exec_res.get('error', 'Unknown error')}")
+        
+        return "default"
+
+
+class MigrationReportGenerator(Node):
+    """
+    Generates and saves comprehensive migration reports to files in the migration workspace.
+    Creates both JSON files for machine processing and markdown files for human readability.
+    """
+    
+    def prep(self, shared):
+        vlogger = get_verbose_logger()
+        
+        if shared.get("verbose_mode"):
+            vlogger.step("Preparing migration report generation")
+        
+        # Collect all migration data from shared state
+        migration_analysis = shared.get("migration_analysis", {})
+        generated_changes = shared.get("generated_changes", {})
+        migration_plan = shared.get("migration_plan", {})
+        applied_changes = shared.get("applied_changes", {})
+        backup_info = shared.get("backup_info", {})
+        project_name = shared.get("project_name", "unknown_project")
+        line_change_report = shared.get("line_change_report", {})
+        migration_changes_summary = shared.get("migration_changes_summary", {})
+        
+        # Get migration workspace path
+        migration_workspace = backup_info.get("migration_workspace")
+        if not migration_workspace or not os.path.exists(migration_workspace):
+            if shared.get("verbose_mode"):
+                vlogger.warning("Migration workspace not found - will save reports to current directory")
+            migration_workspace = f"./migration_reports_{project_name}"
+            os.makedirs(migration_workspace, exist_ok=True)
+        
+        return {
+            "migration_analysis": migration_analysis,
+            "generated_changes": generated_changes,
+            "migration_plan": migration_plan,
+            "applied_changes": applied_changes,
+            "backup_info": backup_info,
+            "project_name": project_name,
+            "migration_workspace": migration_workspace,
+            "line_change_report": line_change_report,
+            "migration_changes_summary": migration_changes_summary,
+            "verbose_mode": shared.get("verbose_mode", False)
+        }
+
+    def exec(self, prep_res):
+        import json
+        from datetime import datetime
+        
+        vlogger = get_verbose_logger()
+        
+        print(f"📄 Generating comprehensive migration reports...")
+        
+        workspace = prep_res["migration_workspace"]
+        project_name = prep_res["project_name"]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if prep_res["verbose_mode"]:
+            vlogger.debug(f"Saving reports to: {workspace}")
+        
+        report_files = []
+        
+        try:
+            # 1. Save migration analysis report
+            analysis_file = os.path.join(workspace, "spring_migration_analysis.json")
+            with open(analysis_file, 'w', encoding='utf-8') as f:
+                json.dump(prep_res["migration_analysis"], f, indent=2, ensure_ascii=False)
+            report_files.append(("Migration Analysis", analysis_file))
+            print(f"   ✅ Saved migration analysis: spring_migration_analysis.json")
+            
+            # 2. Save detailed changes report
+            changes_file = os.path.join(workspace, "migration_changes_detailed.json")
+            with open(changes_file, 'w', encoding='utf-8') as f:
+                json.dump(prep_res["generated_changes"], f, indent=2, ensure_ascii=False)
+            report_files.append(("Detailed Changes", changes_file))
+            print(f"   ✅ Saved detailed changes: migration_changes_detailed.json")
+            
+            # 3. Save migration plan
+            plan_file = os.path.join(workspace, "migration_plan.json")
+            with open(plan_file, 'w', encoding='utf-8') as f:
+                json.dump(prep_res["migration_plan"], f, indent=2, ensure_ascii=False)
+            report_files.append(("Migration Plan", plan_file))
+            print(f"   ✅ Saved migration plan: migration_plan.json")
+            
+            # 4. Save line-by-line change report
+            if prep_res["line_change_report"]:
+                line_report_file = os.path.join(workspace, "line_change_report.json")
+                with open(line_report_file, 'w', encoding='utf-8') as f:
+                    json.dump(prep_res["line_change_report"], f, indent=2, ensure_ascii=False)
+                report_files.append(("Line Change Report", line_report_file))
+                print(f"   ✅ Saved line change report: line_change_report.json")
+            
+            # 5. Save application results
+            if prep_res["applied_changes"]:
+                applied_file = os.path.join(workspace, "migration_application_results.json")
+                with open(applied_file, 'w', encoding='utf-8') as f:
+                    json.dump(prep_res["applied_changes"], f, indent=2, ensure_ascii=False)
+                report_files.append(("Application Results", applied_file))
+                print(f"   ✅ Saved application results: migration_application_results.json")
+            
+            # 6. Generate comprehensive metrics
+            metrics = self._generate_migration_metrics(prep_res)
+            metrics_file = os.path.join(workspace, "migration_metrics.json")
+            with open(metrics_file, 'w', encoding='utf-8') as f:
+                json.dump(metrics, f, indent=2, ensure_ascii=False)
+            report_files.append(("Migration Metrics", metrics_file))
+            print(f"   ✅ Saved migration metrics: migration_metrics.json")
+            
+            # 7. Generate human-readable summary report
+            summary_md = self._generate_summary_markdown(prep_res, metrics, timestamp)
+            summary_file = os.path.join(workspace, "MIGRATION_SUMMARY.md")
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                f.write(summary_md)
+            report_files.append(("Summary Report", summary_file))
+            print(f"   ✅ Saved summary report: MIGRATION_SUMMARY.md")
+            
+            # 8. Generate executive summary for stakeholders
+            exec_summary = self._generate_executive_summary(prep_res, metrics)
+            exec_file = os.path.join(workspace, "EXECUTIVE_SUMMARY.md")
+            with open(exec_file, 'w', encoding='utf-8') as f:
+                f.write(exec_summary)
+            report_files.append(("Executive Summary", exec_file))
+            print(f"   ✅ Saved executive summary: EXECUTIVE_SUMMARY.md")
+            
+            # 9. Create index file for easy navigation
+            index_content = self._generate_report_index(report_files, project_name, timestamp)
+            index_file = os.path.join(workspace, "README_REPORTS.md")
+            with open(index_file, 'w', encoding='utf-8') as f:
+                f.write(index_content)
+            report_files.append(("Report Index", index_file))
+            print(f"   ✅ Saved report index: README_REPORTS.md")
+            
+            return {
+                "success": True,
+                "reports_generated": len(report_files),
+                "report_files": report_files,
+                "workspace": workspace,
+                "metrics": metrics
+            }
+            
+        except Exception as e:
+            if prep_res["verbose_mode"]:
+                vlogger.error(f"Error generating reports: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "reports_generated": len(report_files),
+                "partial_files": report_files
+            }
+    
+    def _generate_migration_metrics(self, prep_res):
+        """Generate comprehensive migration metrics."""
+        from datetime import datetime
+        
+        metrics = {
+            "project_info": {
+                "name": prep_res["project_name"],
+                "analysis_timestamp": datetime.now().isoformat(),
+                "migration_workspace": prep_res["migration_workspace"]
+            },
+            "analysis_metrics": {},
+            "change_metrics": {},
+            "application_metrics": {},
+            "overall_metrics": {}
+        }
+        
+        # Analysis metrics
+        analysis = prep_res["migration_analysis"]
+        if isinstance(analysis, dict):
+            exec_summary = analysis.get("executive_summary", {})
+            metrics["analysis_metrics"] = {
+                "migration_impact": exec_summary.get("migration_impact", "Unknown"),
+                "key_blockers_count": len(exec_summary.get("key_blockers", [])),
+                "recommended_approach": exec_summary.get("recommended_approach", "Unknown"),
+                "analysis_completed": True
+            }
+            
+            # Extract effort estimation if available
+            effort_estimation = analysis.get("effort_estimation", {})
+            if effort_estimation:
+                metrics["analysis_metrics"]["estimated_effort"] = effort_estimation.get("total_effort", "Unknown")
+        
+        # Change generation metrics
+        changes = prep_res["generated_changes"]
+        change_summary = prep_res["migration_changes_summary"]
+        
+        if isinstance(changes, dict):
+            total_changes = sum(len(changes_list) for changes_list in changes.values() if isinstance(changes_list, list))
+            metrics["change_metrics"] = {
+                "total_changes_identified": total_changes,
+                "changes_by_category": {},
+                "files_requiring_changes": change_summary.get("files_with_changes", 0)
+            }
+            
+            for category, changes_list in changes.items():
+                if isinstance(changes_list, list):
+                    metrics["change_metrics"]["changes_by_category"][category] = len(changes_list)
+        
+        # Application metrics
+        applied = prep_res["applied_changes"]
+        if isinstance(applied, dict) and not applied.get("skipped", False):
+            metrics["application_metrics"] = {
+                "changes_applied": applied.get("total_changes_applied", 0),
+                "files_modified": len(applied.get("files_modified", set())),
+                "successful_changes": len(applied.get("successful", [])),
+                "skipped_changes": len(applied.get("skipped", [])),
+                "failed_changes": len(applied.get("failed", [])),
+                "application_success_rate": 0
+            }
+            
+            total_attempted = (metrics["application_metrics"]["successful_changes"] + 
+                             metrics["application_metrics"]["failed_changes"])
+            if total_attempted > 0:
+                success_rate = metrics["application_metrics"]["successful_changes"] / total_attempted * 100
+                metrics["application_metrics"]["application_success_rate"] = round(success_rate, 2)
+        
+        # Overall metrics
+        metrics["overall_metrics"] = {
+            "migration_readiness": "Unknown",
+            "automation_coverage": 0,
+            "critical_issues": [],
+            "next_steps": []
+        }
+        
+        # Determine migration readiness
+        if metrics["change_metrics"].get("total_changes_identified", 0) == 0:
+            metrics["overall_metrics"]["migration_readiness"] = "Ready - No changes needed"
+        elif metrics["application_metrics"].get("changes_applied", 0) > 0:
+            metrics["overall_metrics"]["migration_readiness"] = "In Progress - Changes applied"
+        elif metrics["change_metrics"].get("total_changes_identified", 0) > 0:
+            metrics["overall_metrics"]["migration_readiness"] = "Analysis Complete - Ready for changes"
+        
+        # Calculate automation coverage
+        total_identified = metrics["change_metrics"].get("total_changes_identified", 0)
+        total_applied = metrics["application_metrics"].get("changes_applied", 0)
+        if total_identified > 0:
+            automation_coverage = (total_applied / total_identified) * 100
+            metrics["overall_metrics"]["automation_coverage"] = round(automation_coverage, 2)
+        
+        return metrics
+    
+    def _generate_summary_markdown(self, prep_res, metrics, timestamp):
+        """Generate a comprehensive human-readable summary report."""
+        project_name = prep_res["project_name"]
+        
+        md = f"""# Spring Migration Summary Report
+
+**Project:** {project_name}  
+**Generated:** {timestamp}  
+**Migration Tool:** Spring 5 → Spring 6 Migration Analyzer
+
+---
+
+## 🎯 Executive Summary
+
+### Migration Status: {metrics["overall_metrics"]["migration_readiness"]}
+
+"""
+        
+        # Add analysis summary
+        analysis = prep_res["migration_analysis"]
+        if isinstance(analysis, dict):
+            exec_summary = analysis.get("executive_summary", {})
+            if exec_summary:
+                md += f"""### Analysis Overview
+- **Impact Assessment:** {exec_summary.get("migration_impact", "Not available")}
+- **Recommended Approach:** {exec_summary.get("recommended_approach", "Not specified")}
+
+"""
+                
+                key_blockers = exec_summary.get("key_blockers", [])
+                if key_blockers:
+                    md += f"""### Key Migration Blockers
+"""
+                    for i, blocker in enumerate(key_blockers[:5], 1):
+                        md += f"{i}. {blocker}\n"
+                    md += "\n"
+        
+        # Add metrics
+        change_metrics = metrics.get("change_metrics", {})
+        app_metrics = metrics.get("application_metrics", {})
+        
+        md += f"""## 📊 Migration Metrics
+
+| Metric | Value |
+|--------|--------|
+| **Changes Identified** | {change_metrics.get("total_changes_identified", 0)} |
+| **Files Requiring Changes** | {change_metrics.get("files_requiring_changes", 0)} |
+| **Changes Applied** | {app_metrics.get("changes_applied", 0)} |
+| **Files Modified** | {app_metrics.get("files_modified", 0)} |
+| **Automation Coverage** | {metrics["overall_metrics"]["automation_coverage"]}% |
+| **Success Rate** | {app_metrics.get("application_success_rate", 0)}% |
+
+"""
+        
+        # Add change breakdown
+        changes_by_category = change_metrics.get("changes_by_category", {})
+        if changes_by_category:
+            md += f"""## 🔧 Changes by Category
+
+| Category | Changes Identified |
+|----------|-------------------|
+"""
+            for category, count in changes_by_category.items():
+                category_name = category.replace('_', ' ').title()
+                md += f"| {category_name} | {count} |\n"
+            md += "\n"
+        
+        # Add application results
+        applied = prep_res["applied_changes"]
+        if isinstance(applied, dict) and not applied.get("skipped", False):
+            md += f"""## ✅ Application Results
+
+### Summary
+- **✅ Successful:** {len(applied.get("successful", []))} changes
+- **⏭️ Skipped:** {len(applied.get("skipped", []))} changes  
+- **❌ Failed:** {len(applied.get("failed", []))} changes
+
+"""
+            
+            # Show modified files
+            files_modified = applied.get("files_modified", set())
+            if files_modified:
+                md += f"""### Files Modified ({len(files_modified)})
+"""
+                for file_path in sorted(files_modified):
+                    md += f"- `{file_path}`\n"
+                md += "\n"
+        
+        # Add recommendations
+        md += f"""## 🎯 Next Steps
+
+"""
+        
+        migration_plan = prep_res["migration_plan"]
+        if isinstance(migration_plan, dict):
+            roadmap = migration_plan.get("migration_roadmap", [])
+            if roadmap:
+                md += f"""### Migration Roadmap
+"""
+                for step in roadmap[:3]:  # Show first 3 steps
+                    step_num = step.get("step", "?")
+                    title = step.get("title", "Unknown step")
+                    description = step.get("description", "No description")
+                    effort = step.get("estimated_effort", "Unknown effort")
+                    
+                    md += f"""**Step {step_num}: {title}**
+- Description: {description}
+- Estimated Effort: {effort}
+
+"""
+        
+        # Add manual review items
+        if applied and len(applied.get("skipped", [])) > 0:
+            md += f"""### Manual Review Required
+
+The following changes were identified but require manual review:
+
+"""
+            for skipped in applied.get("skipped", [])[:10]:  # Show first 10
+                file_name = skipped.get("file", "Unknown file")
+                reason = skipped.get("reason", "Manual review required")
+                md += f"- **{file_name}**: {reason}\n"
+            
+            if len(applied.get("skipped", [])) > 10:
+                md += f"- ... and {len(applied.get('skipped', [])) - 10} more items\n"
+            md += "\n"
+        
+        # Add file locations
+        md += f"""## 📁 Generated Reports
+
+The following detailed reports have been generated:
+
+- **`spring_migration_analysis.json`** - Complete LLM analysis results
+- **`migration_changes_detailed.json`** - All identified changes
+- **`migration_plan.json`** - Detailed migration plan
+- **`migration_metrics.json`** - Key metrics and statistics
+- **`line_change_report.json`** - Line-by-line change analysis
+- **`EXECUTIVE_SUMMARY.md`** - Stakeholder-friendly summary
+
+## 🛠️ How to Use These Reports
+
+1. **Review the Executive Summary** for a high-level overview
+2. **Check migration_metrics.json** for detailed statistics
+3. **Use migration_plan.json** for step-by-step implementation guidance
+4. **Reference migration_changes_detailed.json** for specific code changes
+5. **Test thoroughly** before applying changes to production
+
+---
+
+*Generated by Spring Migration Tool - {timestamp}*
+"""
+        
+        return md
+    
+    def _generate_executive_summary(self, prep_res, metrics):
+        """Generate an executive summary for stakeholders."""
+        project_name = prep_res["project_name"]
+        
+        md = f"""# Executive Summary: {project_name} Spring Migration
+
+## Overview
+
+This report summarizes the analysis and migration of **{project_name}** from Spring Framework 5 to Spring Framework 6.
+
+## Key Findings
+
+### Migration Readiness
+**Status:** {metrics["overall_metrics"]["migration_readiness"]}
+
+### Impact Assessment
+"""
+        
+        analysis = prep_res["migration_analysis"]
+        if isinstance(analysis, dict):
+            exec_summary = analysis.get("executive_summary", {})
+            impact = exec_summary.get("migration_impact", "Impact assessment not available")
+            md += f"- {impact}\n\n"
+        
+        # Add metrics in business terms
+        change_metrics = metrics.get("change_metrics", {})
+        app_metrics = metrics.get("application_metrics", {})
+        
+        md += f"""### Scope
+- **{change_metrics.get("total_changes_identified", 0)}** code changes identified
+- **{change_metrics.get("files_requiring_changes", 0)}** files require modification
+- **{metrics["overall_metrics"]["automation_coverage"]}%** of changes can be automated
+
+### Effort Estimation
+"""
+        
+        if isinstance(analysis, dict):
+            effort_estimation = analysis.get("effort_estimation", {})
+            total_effort = effort_estimation.get("total_effort", "Effort estimation not available")
+            md += f"- **Estimated Effort:** {total_effort}\n"
+            
+            team_size = effort_estimation.get("by_category", {}).get("team_size_recommendation", "2-3 developers")
+            if isinstance(team_size, str):
+                md += f"- **Recommended Team Size:** {team_size}\n"
+        
+        md += f"""
+### Risk Assessment
+"""
+        
+        if isinstance(analysis, dict):
+            key_blockers = exec_summary.get("key_blockers", [])
+            if key_blockers:
+                md += f"**Critical Issues ({len(key_blockers)}):**\n"
+                for blocker in key_blockers[:3]:
+                    md += f"- {blocker}\n"
+                if len(key_blockers) > 3:
+                    md += f"- ... and {len(key_blockers) - 3} more issues\n"
+            else:
+                md += "- No critical blocking issues identified\n"
+        
+        md += f"""
+## Recommendations
+
+### Immediate Actions Required
+1. **Review Critical Issues**: Address any blocking issues before proceeding
+2. **Plan Migration Timeline**: Schedule migration activities with development team
+3. **Prepare Test Environment**: Ensure comprehensive testing capabilities
+
+### Implementation Strategy
+"""
+        
+        migration_plan = prep_res["migration_plan"]
+        if isinstance(migration_plan, dict):
+            strategy = migration_plan.get("migration_strategy", {})
+            approach = strategy.get("approach", "Phased approach recommended")
+            timeline = strategy.get("estimated_timeline", "Timeline to be determined")
+            
+            md += f"""- **Approach:** {approach}
+- **Estimated Timeline:** {timeline}
+"""
+        
+        md += f"""
+## Success Metrics
+
+- **Automated Changes:** {app_metrics.get("changes_applied", 0)}/{change_metrics.get("total_changes_identified", 0)} applied
+- **Success Rate:** {app_metrics.get("application_success_rate", 0)}%
+- **Files Updated:** {app_metrics.get("files_modified", 0)} files modified
+
+## Next Steps
+
+1. **Executive Approval**: Secure approval for migration project
+2. **Resource Allocation**: Assign development team and timeline
+3. **Detailed Planning**: Review technical implementation plan
+4. **Testing Strategy**: Plan comprehensive testing approach
+5. **Risk Mitigation**: Address identified blocking issues
+
+---
+
+*For detailed technical information, see the complete migration analysis reports.*
+"""
+        
+        return md
+    
+    def _generate_report_index(self, report_files, project_name, timestamp):
+        """Generate an index file for easy navigation of all reports."""
+        md = f"""# Migration Reports Index - {project_name}
+
+**Generated:** {timestamp}
+
+This directory contains comprehensive migration analysis and reports for the Spring 5 → Spring 6 migration.
+
+## 📋 Report Files
+
+### 🎯 Executive Reports (Start Here)
+- **[EXECUTIVE_SUMMARY.md](./EXECUTIVE_SUMMARY.md)** - High-level summary for stakeholders
+- **[MIGRATION_SUMMARY.md](./MIGRATION_SUMMARY.md)** - Comprehensive technical summary
+
+### 📊 Detailed Analysis Reports
+- **[spring_migration_analysis.json](./spring_migration_analysis.json)** - Complete LLM analysis results
+- **[migration_plan.json](./migration_plan.json)** - Detailed step-by-step migration plan
+- **[migration_metrics.json](./migration_metrics.json)** - Key metrics and statistics
+
+### 🔧 Change Reports
+- **[migration_changes_detailed.json](./migration_changes_detailed.json)** - All identified code changes
+- **[line_change_report.json](./line_change_report.json)** - Line-by-line change analysis
+- **[migration_application_results.json](./migration_application_results.json)** - Results of applying changes
+
+## 🚀 Quick Start Guide
+
+1. **Executives/Managers**: Start with `EXECUTIVE_SUMMARY.md`
+2. **Development Team**: Review `MIGRATION_SUMMARY.md` and `migration_plan.json`
+3. **Implementation**: Use `migration_changes_detailed.json` for specific changes
+4. **Metrics/Tracking**: Reference `migration_metrics.json` for progress tracking
+
+## 📂 File Descriptions
+
+| File | Purpose | Audience |
+|------|---------|----------|
+| `EXECUTIVE_SUMMARY.md` | Business overview and recommendations | Executives, Project Managers |
+| `MIGRATION_SUMMARY.md` | Technical summary with next steps | Development Team, Tech Leads |
+| `spring_migration_analysis.json` | Raw LLM analysis output | Developers, Tool Integration |
+| `migration_plan.json` | Structured implementation plan | Project Managers, Developers |
+| `migration_changes_detailed.json` | Specific code changes needed | Developers |
+| `line_change_report.json` | Line-by-line change breakdown | Developers, QA |
+| `migration_metrics.json` | Statistics and metrics | All stakeholders |
+| `migration_application_results.json` | Results of automated changes | Developers, QA |
+
+## 🛠️ How to Use
+
+### For Project Planning
+1. Review effort estimates in `migration_metrics.json`
+2. Use `migration_plan.json` for timeline planning
+3. Identify risks from `EXECUTIVE_SUMMARY.md`
+
+### For Implementation
+1. Start with automated changes from `migration_application_results.json`
+2. Review manual changes needed from `migration_changes_detailed.json`
+3. Use `line_change_report.json` for detailed change tracking
+
+### For Testing
+1. Reference changed files from `migration_application_results.json`
+2. Create test cases based on `migration_changes_detailed.json`
+3. Validate against requirements in `migration_plan.json`
+
+---
+
+*Generated by Spring Migration Tool*
+"""
+        
+        return md
+
+    def post(self, shared, prep_res, exec_res):
+        """Store the report generation results."""
+        vlogger = get_verbose_logger()
+        
+        shared["migration_reports"] = exec_res
+        
+        if exec_res.get("success", False):
+            reports_count = exec_res.get("reports_generated", 0)
+            workspace = exec_res.get("workspace", "unknown location")
+            
+            print(f"\n📄 Migration Reports Summary:")
+            print(f"   ✅ Generated {reports_count} comprehensive reports")
+            print(f"   📁 Location: {workspace}")
+            print(f"   📋 Key reports:")
+            print(f"      • EXECUTIVE_SUMMARY.md - For stakeholders")
+            print(f"      • MIGRATION_SUMMARY.md - Technical overview")
+            print(f"      • spring_migration_analysis.json - Detailed analysis")
+            print(f"      • migration_metrics.json - Key metrics")
+            print(f"      • README_REPORTS.md - Navigation guide")
+            
+            if shared.get("verbose_mode"):
+                vlogger.success(f"Generated {reports_count} migration reports in {workspace}")
+        else:
+            error = exec_res.get("error", "Unknown error")
+            print(f"❌ Report generation failed: {error}")
+            
+            # Show partial results if any
+            partial_count = exec_res.get("reports_generated", 0)
+            if partial_count > 0:
+                print(f"   📄 Generated {partial_count} partial reports")
+            
+            if shared.get("verbose_mode"):
+                vlogger.error(f"Report generation failed: {error}")
+        
+        return "default"

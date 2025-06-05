@@ -82,6 +82,7 @@ def call_llm(prompt, use_cache=True, timeout=DEFAULT_TIMEOUT, max_retries=MAX_RE
                 _cache_response(cache_key, response)
             
             vlogger.success(f"LLM call successful (attempt {attempt + 1})")
+            
             return response
             
         except TimeoutError as e:
@@ -196,21 +197,49 @@ def _call_openai(prompt, timeout):
         signal.alarm(extended_timeout)
         
         try:
-            client_kwargs = {
-                "api_key": os.environ.get("OPENAI_API_KEY", "your-api-key"),
-                "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1"),
-                "timeout": extended_timeout  # Set client-level timeout
-            }
-            client = OpenAI(**client_kwargs)
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                timeout=extended_timeout,  # Set request-level timeout
-                # Additional parameters for better handling of large requests
-                max_tokens=8192,  # Increased from default
-                temperature=0.1,  # Lower temperature for more consistent responses
-                top_p=0.9
-            )
+            # Use real OpenAI API if API key is provided, otherwise use local server
+            api_key = os.environ.get("OPENAI_API_KEY", "your-api-key")
+            if api_key and api_key != "your-api-key" and api_key.startswith("sk-"):
+                # Configure OpenAI client
+                config = {
+                    "api_key": api_key,
+                    "timeout": extended_timeout
+                }
+                
+                # Use real OpenAI API if API key is valid, otherwise use local server
+                if api_key.startswith("sk-") and len(api_key) > 20:
+                    # Real OpenAI API
+                    client = OpenAI(**config)
+                    model = "gpt-4-turbo-preview"  # Use model with large context window
+                else:
+                    # Local server - use one of the available models
+                    config["base_url"] = os.environ.get("OPENAI_URL", "http://localhost:1234/v1")
+                    client = OpenAI(**config)
+                    model = "meta-llama-3.1-8b-instruct"  # Use exact available local model
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=extended_timeout,
+                    max_tokens=8192,
+                    temperature=0.1,
+                    top_p=0.9
+                )
+            else:
+                # Fallback to local server
+                client_kwargs = {
+                    "api_key": api_key,
+                    "base_url": os.environ.get("OPENAI_URL", "http://localhost:1234/v1"),
+                    "timeout": extended_timeout
+                }
+                client = OpenAI(**client_kwargs)
+                response = client.chat.completions.create(
+                    model="meta-llama-3.1-8b-instruct",  # Use exact available local model
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=extended_timeout,
+                    max_tokens=8192,
+                    temperature=0.1,
+                    top_p=0.9
+                )
             return response.choices[0].message.content
         finally:
             signal.alarm(0)  # Cancel the alarm
