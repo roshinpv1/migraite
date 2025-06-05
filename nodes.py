@@ -12,6 +12,8 @@ from utils.performance_monitor import (
     ConcurrentAnalysisManager
 )
 from utils.verbose_logger import get_verbose_logger
+import xml.etree.ElementTree as ET
+import xml.dom.minidom as minidom
 
 
 # Helper to get content for specific file indices
@@ -3800,32 +3802,191 @@ class MigrationFileApplicator(Node):
                     content = f.read()
                 
                 original_content = content
+                changes_made = []
                 
                 # Check for Spring Boot 2.x versions and update them
                 if build_file.endswith('pom.xml'):
-                    # Look for Spring Boot 2.x parent
+                    # 1. Update Spring Boot parent version
                     if re.search(r'<version>2\.\d+\.\d+(?:\.RELEASE)?</version>', content):
-                        # Update Spring Boot parent version
                         content = re.sub(
                             r'(<parent>\s*<groupId>org\.springframework\.boot</groupId>\s*<artifactId>spring-boot-starter-parent</artifactId>\s*<version>)2\.\d+\.\d+(?:\.RELEASE)?(</version>)',
                             r'\g<1>3.2.0\g<2>',
                             content,
                             flags=re.DOTALL
                         )
+                        changes_made.append("Updated Spring Boot parent version to 3.2.0")
+                    
+                    # 2. Update Java version property to 17 (minimum for Spring Boot 3.x)
+                    if re.search(r'<java\.version>1\.[0-8]</java\.version>', content):
+                        content = re.sub(
+                            r'<java\.version>1\.[0-8]</java\.version>',
+                            '<java.version>17</java.version>',
+                            content
+                        )
+                        changes_made.append("Updated Java version from 1.8 to 17")
+                    
+                    # 3. Update spring-boot.version property if present
+                    if re.search(r'<spring-boot\.version>2\.\d+\.\d+(?:\.RELEASE)?</spring-boot\.version>', content):
+                        content = re.sub(
+                            r'<spring-boot\.version>2\.\d+\.\d+(?:\.RELEASE)?</spring-boot\.version>',
+                            '<spring-boot.version>3.2.0</spring-boot.version>',
+                            content
+                        )
+                        changes_made.append("Updated spring-boot.version property to 3.2.0")
+                    
+                    # 4. Update javax.mail to jakarta.mail dependencies
+                    if 'javax.mail' in content:
+                        content = re.sub(
+                            r'<groupId>javax\.mail</groupId>\s*<artifactId>javax\.mail-api</artifactId>',
+                            '<groupId>com.sun.mail</groupId>\n        <artifactId>jakarta.mail</artifactId>',
+                            content,
+                            flags=re.DOTALL
+                        )
+                        changes_made.append("Updated javax.mail dependency to jakarta.mail")
+                    
+                    # 5. Update other common javax dependencies
+                    javax_to_jakarta_deps = {
+                        'javax.servlet:javax.servlet-api': 'jakarta.servlet:jakarta.servlet-api',
+                        'javax.annotation:javax.annotation-api': 'jakarta.annotation:jakarta.annotation-api',
+                        'javax.validation:validation-api': 'jakarta.validation:jakarta.validation-api',
+                        'javax.persistence:javax.persistence-api': 'jakarta.persistence:jakarta.persistence-api'
+                    }
+                    
+                    for javax_dep, jakarta_dep in javax_to_jakarta_deps.items():
+                        javax_group, javax_artifact = javax_dep.split(':')
+                        jakarta_group, jakarta_artifact = jakarta_dep.split(':')
                         
-                        if content != original_content:
-                            with open(build_file, 'w', encoding='utf-8') as f:
-                                f.write(content)
+                        pattern = f'<groupId>{re.escape(javax_group)}</groupId>\\s*<artifactId>{re.escape(javax_artifact)}</artifactId>'
+                        replacement = f'<groupId>{jakarta_group}</groupId>\n        <artifactId>{jakarta_artifact}</artifactId>'
+                        
+                        if re.search(pattern, content):
+                            content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+                            changes_made.append(f"Updated {javax_dep} to {jakarta_dep}")
+                
+                elif build_file.endswith(('.gradle', '.gradle.kts')):
+                    # Handle Gradle files
+                    if "springBootVersion" in content and re.search(r"springBootVersion\s*=\s*['\"]2\.\d+\.\d+", content):
+                        content = re.sub(
+                            r"(springBootVersion\s*=\s*['\"])2\.\d+\.\d+(['\"])",
+                            r'\g<1>3.2.0\g<2>',
+                            content
+                        )
+                        changes_made.append("Updated Spring Boot version in Gradle")
+                
+                # Write changes if any were made
+                if content != original_content and changes_made:
+                    with open(build_file, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    for change in changes_made:
+                        results["successful"].append({
+                            "success": True,
+                            "file": relative_path,
+                            "type": "spring_boot_version_update",
+                            "description": f"{change} in {relative_path}"
+                        })
+                        results["total_changes_applied"] += 1
+                        print(f"   🔄 {change} in {relative_path}")
+                    
+                    results["files_modified"].add(relative_path)
+                
+            except Exception as e:
+                print(f"   ⚠️  Error checking {relative_path}: {e}")
+                continue
+        
+        # **NEW: Comprehensive javax→jakarta import replacement for ALL Java files**
+        self._force_javax_to_jakarta_updates(migration_workspace, results)
+    
+    def _force_javax_to_jakarta_updates(self, migration_workspace, results):
+        """Force comprehensive javax→jakarta import updates in all Java files."""
+        import os
+        import re
+        
+        print(f"\n🔍 Performing comprehensive javax→jakarta import scan...")
+        
+        # Find all Java files
+        java_files = []
+        for root, dirs, files in os.walk(migration_workspace):
+            for file in files:
+                if file.endswith('.java'):
+                    java_files.append(os.path.join(root, file))
+        
+        # Comprehensive javax→jakarta mapping
+        javax_to_jakarta_mappings = {
+            "javax.persistence": "jakarta.persistence",
+            "javax.validation": "jakarta.validation", 
+            "javax.servlet": "jakarta.servlet",
+            "javax.annotation": "jakarta.annotation",
+            "javax.ejb": "jakarta.ejb",
+            "javax.jms": "jakarta.jms",
+            "javax.enterprise": "jakarta.enterprise",
+            "javax.inject": "jakarta.inject",
+            "javax.interceptor": "jakarta.interceptor",
+            "javax.decorator": "jakarta.decorator",
+            "javax.transaction": "jakarta.transaction",
+            "javax.ws.rs": "jakarta.ws.rs",
+            "javax.json": "jakarta.json",
+            "javax.jsonb": "jakarta.jsonb",
+            "javax.mail": "jakarta.mail",
+            "javax.faces": "jakarta.faces",
+            "javax.websocket": "jakarta.websocket",
+            "javax.security.enterprise": "jakarta.security.enterprise",
+            "javax.security.auth.message": "jakarta.security.auth.message",
+            "javax.xml.bind": "jakarta.xml.bind",
+            "javax.xml.soap": "jakarta.xml.soap",
+            "javax.xml.ws": "jakarta.xml.ws",
+            "javax.batch": "jakarta.batch",
+            "javax.enterprise.concurrent": "jakarta.enterprise.concurrent",
+            "javax.security.jacc": "jakarta.security.jacc",
+        }
+        
+        for java_file in java_files:
+            relative_path = os.path.relpath(java_file, migration_workspace)
+            
+            try:
+                with open(java_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                original_content = content
+                changes_made = []
+                
+                # Check and replace ALL javax imports
+                for javax_pkg, jakarta_pkg in javax_to_jakarta_mappings.items():
+                    # Pattern to match all imports starting with this javax package
+                    import_pattern = rf'^(\s*import\s+(?:static\s+)?){re.escape(javax_pkg)}(\.[^;]+\s*;.*?)$'
+                    
+                    matches = re.findall(import_pattern, content, re.MULTILINE)
+                    if matches:
+                        for match in matches:
+                            # Get the full original import
+                            full_javax_import = javax_pkg + match[1].split(';')[0]
+                            # Create the jakarta equivalent
+                            full_jakarta_import = full_javax_import.replace(javax_pkg, jakarta_pkg, 1)
                             
-                            results["successful"].append({
-                                "success": True,
-                                "file": relative_path,
-                                "type": "spring_boot_version_update",
-                                "description": f"Force updated Spring Boot version in {relative_path}"
-                            })
-                            results["files_modified"].add(relative_path)
-                            results["total_changes_applied"] += 1
-                            print(f"   🔄 Force updated Spring Boot version in {relative_path}")
+                            # Replace the import
+                            old_line = match[0] + full_javax_import + ';'
+                            new_line = match[0] + full_jakarta_import + ';'
+                            
+                            if old_line.strip() in content:
+                                content = content.replace(old_line.strip(), new_line.strip())
+                                changes_made.append(f"{full_javax_import} → {full_jakarta_import}")
+                
+                # Write changes if any were made
+                if content != original_content and changes_made:
+                    with open(java_file, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    
+                    for change in changes_made:
+                        results["successful"].append({
+                            "success": True,
+                            "file": relative_path,
+                            "type": "javax_to_jakarta_comprehensive",
+                            "description": f"Force updated import: {change} in {relative_path}"
+                        })
+                        results["total_changes_applied"] += 1
+                        print(f"   🔄 Force updated import: {change} in {relative_path}")
+                    
+                    results["files_modified"].add(relative_path)
                 
             except Exception as e:
                 print(f"   ⚠️  Error checking {relative_path}: {e}")
@@ -3884,7 +4045,7 @@ class MigrationFileApplicator(Node):
                     # Fall back to generic dependency change
                     content = self._apply_dependency_change(content, change)
             elif category == "javax_to_jakarta":
-                content = self._apply_javax_to_jakarta_change(content, change)
+                content, _ = self._apply_javax_to_jakarta_change(content, change)
             elif category == "dependency_updates":
                 content = self._apply_dependency_change(content, change)
             elif category == "configuration_updates":
